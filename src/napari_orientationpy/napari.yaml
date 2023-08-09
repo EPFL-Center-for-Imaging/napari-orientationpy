@@ -1,0 +1,10 @@
+name: napari-orientationpy
+display_name: Napari Orientationpy
+contributions:
+  commands:
+    - id: napari-orientationpy.widget
+      title: Orientation widget
+      python_name: napari_orientationpy:OrientationWidget
+  widgets:
+    - command: napari-orientationpy.widget
+      display_name: Orientation widget
