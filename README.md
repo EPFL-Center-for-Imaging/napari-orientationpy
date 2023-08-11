@@ -2,6 +2,8 @@
 
 Napari plugin for the Orientationpy project.
 
+- No 2D, timeseries, or multichannel yet: only 3D is supported.
+
 ----------------------------------
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
