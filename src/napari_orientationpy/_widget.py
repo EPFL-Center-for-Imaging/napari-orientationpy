@@ -8,7 +8,6 @@ from qtpy.QtWidgets import (
     QLabel, 
     QGridLayout, 
     QPushButton,
-    QGroupBox,
     QSpinBox,
     QDoubleSpinBox,
     QCheckBox,
@@ -28,17 +27,17 @@ import napari.layers
 from skimage.exposure import rescale_intensity
 
 
-@register_dock_widget(menu="Orientationpy > Orientation")
+@register_dock_widget(menu="Orientationpy > Orientation (pixels)")
 class OrientationWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
         self.viewer = napari_viewer
 
         # TMP - add an image
-        import skimage.data
-        sample_3d_image = np.repeat(skimage.data.coins()[:70, :70][None], 30, axis=0)
-        self.viewer.add_image(sample_3d_image, name='image 1')
-        self.viewer.add_image(-1 * sample_3d_image, name='image 2')
+        import tifffile
+        # sample_3d_image = tifffile.imread('/home/wittwer/data/anglea/Reslice_sk_dry-super-small.tif')
+        sample_3d_image = tifffile.imread('/home/wittwer/data/drosophila_trachea.tif')
+        self.viewer.add_image(sample_3d_image, name='image')
 
         self.image = None
         self.phi = self.theta = self.energy = self.coherency = None
@@ -54,41 +53,34 @@ class OrientationWidget(QWidget):
         # Image
         self.cb_image = QComboBox()
         self.cb_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Image", self), 0, 0)
+        grid_layout.addWidget(QLabel("3D Image", self), 0, 0)
         grid_layout.addWidget(self.cb_image, 0, 1)
-
-        # Compute orientation
-        compute_orientation_group = QGroupBox()
-        compute_orientation_group.setTitle("Compute orientation")
-        compute_orientation_layout = QGridLayout()
-        compute_orientation_layout.setContentsMargins(10, 10, 10, 10)
 
         # Sigma
         self.sigma_spinbox = QDoubleSpinBox()
         self.sigma_spinbox.setMinimum(0.1)
-        # self.sigma_spinbox.setMaximum(50)
         self.sigma_spinbox.setValue(self.sigma)
         self.sigma_spinbox.setSingleStep(0.1)
         self.sigma_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        compute_orientation_layout.addWidget(QLabel("Sigma", self), 0, 0)
-        compute_orientation_layout.addWidget(self.sigma_spinbox, 0, 1)
+        grid_layout.addWidget(QLabel("Sigma", self), 1, 0)
+        grid_layout.addWidget(self.sigma_spinbox, 1, 1)
 
         # Mode
         self.cb_mode = QComboBox()
         self.cb_mode.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.cb_mode.addItems([self.mode, 'membrane'])
-        compute_orientation_layout.addWidget(QLabel("Mode", self), 1, 0)
-        compute_orientation_layout.addWidget(self.cb_mode, 1, 1)
+        grid_layout.addWidget(QLabel("Mode", self), 2, 0)
+        grid_layout.addWidget(self.cb_mode, 2, 1)
 
-        compute_orientation_layout.addWidget(QLabel("Output RGB", self), 2, 0)
+        grid_layout.addWidget(QLabel("Output RGB", self), 3, 0)
         self.cb_rgb = QCheckBox()
         self.cb_rgb.setChecked(True)
-        compute_orientation_layout.addWidget(self.cb_rgb, 2, 1)
+        grid_layout.addWidget(self.cb_rgb, 3, 1)
 
-        compute_orientation_layout.addWidget(QLabel("Output vectors", self), 3, 0)
+        grid_layout.addWidget(QLabel("Output vectors", self), 4, 0)
         self.cb_vec = QCheckBox()
         self.cb_vec.setChecked(True)
-        compute_orientation_layout.addWidget(self.cb_vec, 3, 1)
+        grid_layout.addWidget(self.cb_vec, 4, 1)
 
         # Vector node spacing
         self.node_spacing_spinbox = QSpinBox()
@@ -97,20 +89,17 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox.setValue(10)
         self.node_spacing_spinbox.setSingleStep(1)
         self.node_spacing_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        compute_orientation_layout.addWidget(QLabel("Node spacing (XY)", self), 4, 0)
-        compute_orientation_layout.addWidget(self.node_spacing_spinbox, 4, 1)
+        grid_layout.addWidget(QLabel("Node spacing (XY)", self), 5, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox, 5, 1)
 
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
-        compute_orientation_layout.addWidget(self.compute_orientation_btn, 5, 0, 1, 2)
-        compute_orientation_group.setLayout(compute_orientation_layout)
-        grid_layout.addWidget(compute_orientation_group, 1, 0, 1, 2)
+        grid_layout.addWidget(self.compute_orientation_btn, 6, 0, 1, 2)
 
         # Progress bar
-        self.pbar = QProgressBar(self, minimum=0, maximum=0)
-        self.pbar.setVisible(False)
+        self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 2, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 7, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -124,7 +113,8 @@ class OrientationWidget(QWidget):
         self.cb_image.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
-                self.cb_image.addItem(x.name, x.data)
+                if len(x.data.shape) == 3:
+                    self.cb_image.addItem(x.name, x.data)
 
     def _orientation_vectors(self):
         
@@ -182,6 +172,10 @@ class OrientationWidget(QWidget):
         self.viewer.add_vectors(displacement_vectors, **vector_props)
 
     @thread_worker
+    def _fake_worker(self):
+        import time; time.sleep(0.5)
+
+    @thread_worker
     def _compute_orientation(self) -> np.ndarray:
         self.image = self.cb_image.currentData()
         self.sigma = self.sigma_spinbox.value()
@@ -219,13 +213,13 @@ class OrientationWidget(QWidget):
         self.viewer.add_image(self.imdisplay_rgb, rgb=True, name="Color-coded orientation")
 
     def _trigger_compute_orientation(self):
+        self.pbar.setMaximum(0)
         if self._check_should_compute():
             worker = self._compute_orientation()
-            worker.returned.connect(self._thread_returned)
-            self.pbar.setVisible(True)
-            worker.start()
         else:
-            self._thread_returned()
+            worker = self._fake_worker()
+        worker.returned.connect(self._thread_returned)
+        worker.start()
 
     def _check_should_compute(self):
         if self.cb_image.currentData() is None:
@@ -241,11 +235,12 @@ class OrientationWidget(QWidget):
         if self.image is None:
             return True
         
-        self.image_cp = self.image.copy()
-        if np.array_equal(self.image, self.image_cp):
-            return False
+        return False
+        # self.image_cp = self.image.copy()
+        # if np.array_equal(self.image, self.image_cp):
+        #     return False
 
     def _thread_returned(self):
         if self.cb_rgb.isChecked(): self._imdisplay_rgb()
         if self.cb_vec.isChecked(): self._orientation_vectors()
-        self.pbar.setVisible(False)
+        self.pbar.setMaximum(1)

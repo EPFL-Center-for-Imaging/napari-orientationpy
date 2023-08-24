@@ -2,9 +2,19 @@ name: napari-orientationpy
 display_name: Napari Orientationpy
 contributions:
   commands:
-    - id: napari-orientationpy.widget
-      title: Orientation widget
+    - id: napari-orientationpy.pixels
+      title: Orientation (pixels)
       python_name: napari_orientationpy:OrientationWidget
+    - id: napari-orientationpy.distribution
+      title: Orientation distribution plot
+      python_name: napari_orientationpy:OrientationPlottingWidget
+    - id: napari-orientationpy.boxes
+      title: Orientation (boxes)
+      python_name: napari_orientationpy:OrientationBoxesWidget
   widgets:
-    - command: napari-orientationpy.widget
-      display_name: Orientation widget
+    - command: napari-orientationpy.pixels
+      display_name: Orientation (pixels)
+    - command: napari-orientationpy.distribution
+      display_name: Orientation distribution plot
+    - command: napari-orientationpy.boxes
+      display_name: Orientation (boxes)
