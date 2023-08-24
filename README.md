@@ -1,8 +1,6 @@
 # napari-orientationpy
 
-Napari plugin for the Orientationpy project.
-
-- No 2D, timeseries, or multichannel yet: only 3D is supported.
+Napari plugin for the Orientationpy project. Only 3D images are supported!
 
 ----------------------------------
 

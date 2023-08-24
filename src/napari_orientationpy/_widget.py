@@ -235,10 +235,10 @@ class OrientationWidget(QWidget):
         if self.image is None:
             return True
         
+        if not np.array_equal(self.cb_image.currentData(), self.image):
+            return True
+        
         return False
-        # self.image_cp = self.image.copy()
-        # if np.array_equal(self.image, self.image_cp):
-        #     return False
 
     def _thread_returned(self):
         if self.cb_rgb.isChecked(): self._imdisplay_rgb()
