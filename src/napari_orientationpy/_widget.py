@@ -33,12 +33,6 @@ class OrientationWidget(QWidget):
         super().__init__()
         self.viewer = napari_viewer
 
-        # TMP - add an image
-        import tifffile
-        # sample_3d_image = tifffile.imread('/home/wittwer/data/anglea/Reslice_sk_dry-super-small.tif')
-        sample_3d_image = tifffile.imread('/home/wittwer/data/drosophila_trachea.tif')
-        self.viewer.add_image(sample_3d_image, name='image')
-
         self.image = None
         self.phi = self.theta = self.energy = self.coherency = None
         self.imdisplay_rgb = None
