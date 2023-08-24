@@ -108,7 +108,8 @@ class OrientationWidget(QWidget):
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
                 if len(x.data.shape) == 3:
-                    self.cb_image.addItem(x.name, x.data)
+                    if not x.rgb:
+                        self.cb_image.addItem(x.name, x.data)
 
     def _orientation_vectors(self):
         

@@ -70,7 +70,8 @@ class OrientationPlottingWidget(QWidget):
         self.cb_vectors.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Vectors):
-                self.cb_vectors.addItem(x.name, x.data)
+                if x.data.shape[2] == 3:
+                    self.cb_vectors.addItem(x.name, x.data)
 
     def _plot_orientation(self):
         vectors_data = self.cb_vectors.currentData()

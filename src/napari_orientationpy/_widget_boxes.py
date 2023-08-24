@@ -105,7 +105,8 @@ class OrientationBoxesWidget(QWidget):
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
                 if len(x.data.shape) == 3:
-                    self.cb_image.addItem(x.name, x.data)
+                    if not x.rgb:
+                        self.cb_image.addItem(x.name, x.data)
 
     @thread_worker
     def _fake_worker(self):
