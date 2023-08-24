@@ -68,7 +68,7 @@ class OrientationWidget(QWidget):
 
         grid_layout.addWidget(QLabel("Output RGB", self), 3, 0)
         self.cb_rgb = QCheckBox()
-        self.cb_rgb.setChecked(True)
+        self.cb_rgb.setChecked(False)
         grid_layout.addWidget(self.cb_rgb, 3, 1)
 
         grid_layout.addWidget(QLabel("Output vectors", self), 4, 0)
@@ -149,7 +149,6 @@ class OrientationWidget(QWidget):
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
 
         vector_props = {
-            # 'name': f'vectors_ns_{node_spacing}',
             'name': 'Orientation vectors',
             'edge_width': 0.7,
             'opacity': 1.0,
