@@ -76,24 +76,45 @@ class OrientationWidget(QWidget):
         self.cb_vec.setChecked(True)
         grid_layout.addWidget(self.cb_vec, 4, 1)
 
-        # Vector node spacing
-        self.node_spacing_spinbox = QSpinBox()
-        self.node_spacing_spinbox.setMinimum(1)
-        self.node_spacing_spinbox.setMaximum(100)
-        self.node_spacing_spinbox.setValue(10)
-        self.node_spacing_spinbox.setSingleStep(1)
-        self.node_spacing_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Node spacing (XY)", self), 5, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox, 5, 1)
+        # Vector display spacing (X)
+        self.node_spacing_spinbox_X = QSpinBox()
+        self.node_spacing_spinbox_X.setMinimum(1)
+        self.node_spacing_spinbox_X.setMaximum(100)
+        self.node_spacing_spinbox_X.setValue(10)
+        self.node_spacing_spinbox_X.setSingleStep(1)
+        self.node_spacing_spinbox_X.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        grid_layout.addWidget(QLabel("Vector spacing (X)", self), 5, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_X, 5, 1)
 
+        # Vector display spacing (Y)
+        self.node_spacing_spinbox_Y = QSpinBox()
+        self.node_spacing_spinbox_Y.setMinimum(1)
+        self.node_spacing_spinbox_Y.setMaximum(100)
+        self.node_spacing_spinbox_Y.setValue(10)
+        self.node_spacing_spinbox_Y.setSingleStep(1)
+        self.node_spacing_spinbox_Y.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        grid_layout.addWidget(QLabel("Vector spacing (Y)", self), 6, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_Y, 6, 1)
+
+        # Vector display spacing (Z)
+        self.node_spacing_spinbox_Z = QSpinBox()
+        self.node_spacing_spinbox_Z.setMinimum(1)
+        self.node_spacing_spinbox_Z.setMaximum(100)
+        self.node_spacing_spinbox_Z.setValue(1)
+        self.node_spacing_spinbox_Z.setSingleStep(1)
+        self.node_spacing_spinbox_Z.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        grid_layout.addWidget(QLabel("Vector spacing (Z)", self), 7, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_Z, 7, 1)
+
+        # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
-        grid_layout.addWidget(self.compute_orientation_btn, 6, 0, 1, 2)
+        grid_layout.addWidget(self.compute_orientation_btn, 8, 0, 1, 2)
 
         # Progress bar
         self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 7, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 9, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -113,10 +134,12 @@ class OrientationWidget(QWidget):
 
     def _orientation_vectors(self):
         
-        ns = self.node_spacing_spinbox.value()
-        vector_scale = ns * 2
+        self.nsx = self.node_spacing_spinbox_X.value()
+        self.nsy = self.node_spacing_spinbox_Y.value()
+        self.nsz = self.node_spacing_spinbox_Z.value()
+        vector_scale = np.mean([self.nsz, self.nsy, self.nsx]) * 2
 
-        node_spacing=(1, ns, ns)
+        node_spacing = (self.nsz, self.nsy, self.nsx)
 
         phi_sample = self.phi[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
         theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]

@@ -3,13 +3,10 @@ import numpy
 import math
 from orientationpy.plotting import projectOrientations3d
 
-VERBOSE = False
-
-
 def plotOrientations3d(
     orientations_zyx,
     projection="lambert",
-    plot="both",
+    plot="points",
     binValueMin=None,
     binValueMax=None,
     binNormalisation=False,
@@ -20,7 +17,6 @@ def plotOrientations3d(
     subtitle={"points": "", "bins": ""},
     saveFigPath=None,
     ax=None,  # Watch me
-
 ):
     """
     Main function for plotting 3D orientations.
@@ -93,61 +89,24 @@ def plotOrientations3d(
     """
     import matplotlib.pyplot
 
-    # ========================================================================
-    # ==== Reading in data, and formatting to x,y,z sphere                 ===
-    # ========================================================================
     numberOfPoints = orientations_zyx.shape[0]
 
-    # ========================================================================
-    # ==== Check that all the vectors are unit vectors                     ===
-    # ========================================================================
-    if VERBOSE:
-        print("\t-> Normalising all vectors in x-y-z representation..."),
-
-    # from http://stackoverflow.com/questions/2850743/numpy-how-to-quickly-normalize-many-vectors
     norms = numpy.apply_along_axis(numpy.linalg.norm, 1, orientations_zyx)
-    print(norms.shape)
-    print((norms.reshape(-1, 1)).shape)
     orientations_zyx = orientations_zyx / norms.reshape(-1, 1)
 
-    print(orientations_zyx.shape)
-
-    if VERBOSE:
-        print("done.")
-
-    # ========================================================================
-    # ==== At this point we should have clean x,y,z data in memory         ===
-    # ========================================================================
-    if VERBOSE:
-        print("\t-> We have %i orientations in memory." % (numberOfPoints))
-
-    # Since this is the final number of vectors, at this point we can set up the
-    #   matrices for the projection.
     projection_xy = numpy.zeros((numberOfPoints, 2))
 
-    # TODO: Check if there are any values less than zero or more that 2*pi
     projection_theta_r = numpy.zeros((numberOfPoints, 2))
 
-    # ========================================================================
-    # ==== Projecting from x,y,z sphere to the desired projection          ===
-    # ========================================================================
-    # TODO: Vectorise this...
     for vectorN in range(numberOfPoints):
-        # unpack 3D x,y,z
         z, y, x = orientations_zyx[vectorN]
-        # print "\t\txyz = ", x, y, z
-
-        # # fold over the negative half of the sphere
-        # #     flip every component of the vector over
-        # if z < 0:
-        #     z = -z
-        #     y = -y
-        #     x = -x
+        if z < 0:
+            z = -z
+            y = -y
+            x = -x
 
         projection_xy[vectorN], projection_theta_r[vectorN] = projectOrientations3d([z, y, x], "cartesian", projection)
-        
-    # get radiusMax based on projection
-    #                                    This is only limited to sqrt(2) because we're flipping over the negative side of the sphere
+
     if projection == "lambert":
         radiusMax = numpy.sqrt(2)
     elif projection == "stereo":
@@ -155,43 +114,18 @@ def plotOrientations3d(
     elif projection == "equidistant":
         radiusMax = 1.0
 
-    if VERBOSE:
-        print("\t-> Biggest projected radius (r,t) = {}".format(numpy.abs(projection_theta_r[:, 1]).max()))
-
-    # print "projection_xy\n", projection_xy
-    # print "\n\nprojection_theta_r\n", projection_theta_r
-
     if plot == "points" or plot == "both":
         fig = matplotlib.pyplot.figure()
         fig.suptitle(title)
 
-        ### --- Use existing axis --- ###
         show = ax is None # We assume if an axis wasn't passed, the plots should be shown.
-        if ax is None:
+        if show:
             if plot == "both":
-                ax = fig.add_subplot(121, polar=True)
+                ax = fig.add_subplot(121)#, polar=True)
             else:
-                ax = fig.add_subplot(111, polar=True)
+                ax = fig.add_subplot(111)#, polar=True)
 
         ax.set_title(subtitle["points"] + "\n")
-
-        # # set the line along which the numbers are plotted to 0°
-        # # ax.set_rlabel_position(0)
-        # matplotlib.pyplot.axis((0, math.pi * 2, 0, radiusMax))
-
-        # # set radius grids to 15, 30, etc, which means 6 numbers (r=0 not included)
-        # radiusGridAngles = numpy.arange(15, 91, 15)
-        # radiusGridValues = []
-        # for angle in radiusGridAngles:
-        #     #                        - project the 15, 30, 45 as spherical coords, and select the r part of theta r-
-        #     #               - append to list of radii -
-
-        #     radiusGridValues.append(projectOrientations3d([0, angle * math.pi / 180.0, 1], "spherical", projection)[1][1])
-        # #                                       --- list comprehension to print 15°, 30°, 45° ----------
-        # # ax.set_rgrids(radiusGridValues, labels=[r"%02i$^\circ$" % (x) for x in numpy.arange(15, 91, 15)], angle=None, fmt=None)
-        
-        # ax.plot(projection_theta_r[:, 0], projection_theta_r[:, 1], ".", markersize=pointMarkerSize)
-
         ax.plot(projection_xy[:, 0], projection_xy[:, 1], ".", markersize=pointMarkerSize)
 
         if show:
@@ -199,20 +133,6 @@ def plotOrientations3d(
                 matplotlib.pyplot.show()
 
     if plot == "bins" or plot == "both":
-        # ========================================================================
-        # ==== Binning the data -- this could be optional...                   ===
-        # ========================================================================
-        # This code inspired from Hugues Talbot and Clara Jaquet's developments.
-        # As published in:
-        #   Identifying and following particle-to-particle contacts in real granular media: an experimental challenge
-        #   Gioacchino Viggiani, Edward Andò, Clara Jaquet and Hugues Talbot
-        #   Keynote Lecture
-        #   Particles and Grains 2013 Sydney
-        #
-        # ...The number of radial bins (numberOfRings)
-        # defines the radial binning, and for each radial bin starting from the centre,
-        # the number of angular bins is  4(2n + 1)
-        #
         import matplotlib.collections
 
         # from matplotlib.colors import Normalize
@@ -225,26 +145,11 @@ def plotOrientations3d(
             fig = matplotlib.pyplot.figure()
             ax = fig.add_subplot(111, polar=True)
 
-        if VERBOSE:
-            print("\t-> Starting Data binning...")
-
-        # This must be an integer -- could well be a parameter if this becomes a function.
-        if VERBOSE:
-            print("\t-> Number of Rings (radial bins) = ", numberOfRings)
-
-        # As per the publication, the maximum number of bins for each ring, coming from the inside out is 4(2n + 1):
         numberOfAngularBinsPerRing = numpy.arange(1, numberOfRings + 1, 1)
         numberOfAngularBinsPerRing = 4 * (2 * numberOfAngularBinsPerRing - 1)
 
-        if VERBOSE:
-            print("\t-> Number of angular bins per ring = ", numberOfAngularBinsPerRing)
-
-        # defining an array with dimensions numberOfRings x numberOfAngularBinsPerRing
         binCounts = numpy.zeros((numberOfRings, numberOfAngularBinsPerRing[-1]))
 
-        # ========================================================================
-        # ==== Start counting the vectors into bins                            ===
-        # ========================================================================
         for vectorN in range(numberOfPoints):
             # unpack projected angle and radius for this point
             angle, radius = projection_theta_r[vectorN, :]

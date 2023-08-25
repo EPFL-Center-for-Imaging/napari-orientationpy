@@ -121,7 +121,7 @@ class OrientationBoxesWidget(QWidget):
         self.nsy = self.node_spacing_spinbox_Y.value()
         self.nsz = self.node_spacing_spinbox_Z.value()
 
-        node_spacing=(self.nsz, self.nsy, self.nsx)
+        node_spacing = (self.nsz, self.nsy, self.nsx)
 
         structureTensorBoxes = orientationpy.computeGradientStructureTensorBoxes(
             self.image,

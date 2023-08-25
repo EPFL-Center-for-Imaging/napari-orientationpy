@@ -80,6 +80,10 @@ class OrientationPlottingWidget(QWidget):
         
         vector_displacements = vectors_data[:, 1]
 
+        import numpy as np
+
+        np.save('vectors.npy', vector_displacements)
+
         # print(vector_displacements[0])
         # vector_displacements = vector_displacements[:, ::-1]
         # print(vector_displacements[0])
