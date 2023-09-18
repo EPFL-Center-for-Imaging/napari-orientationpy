@@ -166,9 +166,10 @@ class OrientationWidget(QWidget):
         energy_rescaled = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
         displacements_cartesian *= (energy_normalized := rescale_intensity(energy_rescaled, out_range=(0, 1)))
 
-        a = np.reshape(node_origins, (3, -1)).T[None]
-        b = np.reshape(displacements_cartesian, (3, -1)).T[None]
-        displacement_vectors = np.vstack((a, b))
+        displacements = np.reshape(displacements_cartesian, (3, -1)).T[None]
+        origins = np.reshape(node_origins, (3, -1)).T[None] - displacements / 2
+
+        displacement_vectors = np.vstack((origins, displacements))
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
 
         vector_props = {
