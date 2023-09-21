@@ -26,6 +26,8 @@ import numpy as np
 import napari.layers
 from skimage.exposure import rescale_intensity
 
+from .misorientation import fast_misorientation_angle
+
 
 @register_dock_widget(menu="Orientationpy > Orientation (pixels)")
 class OrientationWidget(QWidget):
@@ -76,6 +78,11 @@ class OrientationWidget(QWidget):
         self.cb_vec.setChecked(True)
         grid_layout.addWidget(self.cb_vec, 4, 1)
 
+        grid_layout.addWidget(QLabel("Output gradient", self), 5, 0)
+        self.cb_origrad = QCheckBox()
+        self.cb_origrad.setChecked(True)
+        grid_layout.addWidget(self.cb_origrad, 5, 1)
+
         # Vector display spacing (X)
         self.node_spacing_spinbox_X = QSpinBox()
         self.node_spacing_spinbox_X.setMinimum(1)
@@ -83,8 +90,8 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_X.setValue(10)
         self.node_spacing_spinbox_X.setSingleStep(1)
         self.node_spacing_spinbox_X.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (X)", self), 5, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_X, 5, 1)
+        grid_layout.addWidget(QLabel("Vector spacing (X)", self), 6, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_X, 6, 1)
 
         # Vector display spacing (Y)
         self.node_spacing_spinbox_Y = QSpinBox()
@@ -93,8 +100,8 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Y.setValue(10)
         self.node_spacing_spinbox_Y.setSingleStep(1)
         self.node_spacing_spinbox_Y.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (Y)", self), 6, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_Y, 6, 1)
+        grid_layout.addWidget(QLabel("Vector spacing (Y)", self), 7, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_Y, 7, 1)
 
         # Vector display spacing (Z)
         self.node_spacing_spinbox_Z = QSpinBox()
@@ -103,18 +110,18 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Z.setValue(1)
         self.node_spacing_spinbox_Z.setSingleStep(1)
         self.node_spacing_spinbox_Z.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (Z)", self), 7, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_Z, 7, 1)
+        grid_layout.addWidget(QLabel("Vector spacing (Z)", self), 8, 0)
+        grid_layout.addWidget(self.node_spacing_spinbox_Z, 8, 1)
 
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
-        grid_layout.addWidget(self.compute_orientation_btn, 8, 0, 1, 2)
+        grid_layout.addWidget(self.compute_orientation_btn, 9, 0, 1, 2)
 
         # Progress bar
         self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 9, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 10, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -222,6 +229,18 @@ class OrientationWidget(QWidget):
 
         self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
 
+        # Orientation gradient
+        print('Computing gradient.')
+        self.orientation_gradient = fast_misorientation_angle(self.theta, self.phi)
+
+    def _orientation_gradient(self):
+        for layer in self.viewer.layers:
+            if layer.name == "Orientation gradient":
+                layer.data = self.orientation_gradient
+                return
+
+        self.viewer.add_image(self.orientation_gradient, colormap='inferno', name="Orientation gradient")
+
     def _imdisplay_rgb(self):        
         for layer in self.viewer.layers:
             if layer.name == "Color-coded orientation":
@@ -261,4 +280,5 @@ class OrientationWidget(QWidget):
     def _thread_returned(self):
         if self.cb_rgb.isChecked(): self._imdisplay_rgb()
         if self.cb_vec.isChecked(): self._orientation_vectors()
+        if self.cb_origrad.isChecked(): self._orientation_gradient()
         self.pbar.setMaximum(1)
