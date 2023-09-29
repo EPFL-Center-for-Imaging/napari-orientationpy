@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 from napari_tools_menu import register_dock_widget
+from napari.utils.notifications import show_info
 from qtpy.QtWidgets import (
     QWidget, 
     QComboBox, 
@@ -42,7 +43,7 @@ class OrientationBoxesWidget(QWidget):
         # Image
         self.cb_image = QComboBox()
         self.cb_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("3D Image", self), 0, 0)
+        grid_layout.addWidget(QLabel("Image (2D or 3D)", self), 0, 0)
         grid_layout.addWidget(self.cb_image, 0, 1)
 
         # Mode
@@ -104,7 +105,7 @@ class OrientationBoxesWidget(QWidget):
         self.cb_image.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
-                if len(x.data.shape) == 3:
+                if len(x.data.shape) in [2, 3]:
                     if not x.rgb:
                         self.cb_image.addItem(x.name, x.data)
 
@@ -114,14 +115,28 @@ class OrientationBoxesWidget(QWidget):
 
     @thread_worker
     def _compute_orientation(self) -> np.ndarray:
+        """
+        
+        """
         self.image = self.cb_image.currentData()
+        image_shape = self.image.shape
+        ndims = len(image_shape)
+        is_3D = ndims == 3
+        if not is_3D:
+            if self.mode != 'fiber':
+                self.cb_mode.setCurrentIndex(0)
+                show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
-
         self.nsx = self.node_spacing_spinbox_X.value()
         self.nsy = self.node_spacing_spinbox_Y.value()
         self.nsz = self.node_spacing_spinbox_Z.value()
 
-        node_spacing = (self.nsz, self.nsy, self.nsx)
+        if is_3D:
+            node_spacing = (self.nsz, self.nsy, self.nsx)
+            rescale_factor = np.mean([self.nsz, self.nsy, self.nsx])
+        else:
+            node_spacing = (self.nsy, self.nsx)
+            rescale_factor = np.mean([self.nsy, self.nsx])
 
         structureTensorBoxes = orientationpy.computeGradientStructureTensorBoxes(
             self.image,
@@ -135,29 +150,37 @@ class OrientationBoxesWidget(QWidget):
             computeCoherency=False,
         )
 
-        thetaBoxes = orientation_returns['theta']
-        energyBoxes = orientation_returns['energy']
+        thetaBoxes = orientation_returns.get('theta')
+        energyBoxes = orientation_returns.get('energy')
 
-        boxVectorsZYX = orientationpy.anglesToVectors(orientation_returns)
+        boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
 
-        boxCentresX, boxCentresY, boxCentresZ = np.mgrid[
-            self.nsz // 2 : thetaBoxes.shape[0] * self.nsz + self.nsz // 2 : self.nsz,
-            self.nsy // 2 : thetaBoxes.shape[1] * self.nsy + self.nsy // 2 : self.nsy,
-            self.nsx // 2 : thetaBoxes.shape[2] * self.nsx + self.nsx // 2 : self.nsx,
-        ]
-
-        boxCentres = np.concatenate((boxCentresX[None], boxCentresY[None], boxCentresZ[None]), axis=0)
-
-        _, bx, by, bz = boxCentres.shape
-
-        bc = boxCentres.reshape((3, bx*by*bz))
-        bv = boxVectorsZYX.reshape((3, bx*by*bz))
+        if is_3D:
+            boxCentresX, boxCentresY, boxCentresZ = np.mgrid[
+                self.nsz // 2 : thetaBoxes.shape[0] * self.nsz + self.nsz // 2 : self.nsz,
+                self.nsy // 2 : thetaBoxes.shape[1] * self.nsy + self.nsy // 2 : self.nsy,
+                self.nsx // 2 : thetaBoxes.shape[2] * self.nsx + self.nsx // 2 : self.nsx,
+            ]
+            boxCentres = np.stack((boxCentresX, boxCentresY, boxCentresZ), axis=0)
+            _, bx, by, bz = boxCentres.shape
+            nvects = bx*by*bz
+        else:
+            boxCentresX, boxCentresY = np.mgrid[
+                self.nsy // 2 : thetaBoxes.shape[0] * self.nsy + self.nsy // 2 : self.nsy,
+                self.nsx // 2 : thetaBoxes.shape[1] * self.nsx + self.nsx // 2 : self.nsx,
+            ]
+            boxCentres = np.stack((boxCentresX, boxCentresY))
+            _, bx, by = boxCentres.shape
+            nvects = bx*by
+        
+        bc = boxCentres.reshape((ndims, nvects))
+        bv = boxVectorCoords.reshape((ndims, nvects))
 
         energy_normalized = rescale_intensity(energyBoxes, out_range=(0, 1))
-        bv *= energy_normalized.reshape((bx*by*bz))
-        bv *= np.mean([self.nsz, self.nsy, self.nsx])  # mean?
+        bv *= energy_normalized.reshape((nvects))
+        bv *= rescale_factor 
 
-        vectors = np.concatenate((bc[None], bv[None]), axis=0)
+        vectors = np.stack((bc, bv), axis=0)
         vectors = np.rollaxis(vectors, axis=2)
 
         return (vectors, energy_normalized)
@@ -173,7 +196,7 @@ class OrientationBoxesWidget(QWidget):
 
     def _check_should_compute(self):
         if self.cb_image.currentData() is None:
-            print("Select an image first.")
+            show_info("Select an image first.")
             return False
         
         if self.nsx != self.node_spacing_spinbox_X.value():
@@ -191,26 +214,26 @@ class OrientationBoxesWidget(QWidget):
         if self.image is None:
             return True
         
+        if not np.array_equal(self.cb_image.currentData(), self.image):
+            return True
+        
         return False
         
     def _thread_returned(self, payload):
         self.pbar.setMaximum(1)
-
+        if payload is None:
+            return
         displacement_vectors, energy_normalized = payload
-
         vector_props = {
             'name': 'Orientation boxes',
             'edge_width': 0.7,
             'opacity': 1.0,
-            'ndim': 3,
+            'ndim': displacement_vectors.shape[2],
             'features': {'length': energy_normalized.ravel()},
             'edge_color': 'length',
             'vector_style': 'line',
         }
-
-        for layer in self.viewer.layers:
+        for idx, layer in enumerate(self.viewer.layers):
             if layer.name == "Orientation boxes":
-                layer.data = displacement_vectors
-                return
-
+                self.viewer.layers.pop(idx)
         self.viewer.add_vectors(displacement_vectors, **vector_props)

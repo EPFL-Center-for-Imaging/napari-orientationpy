@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
     QDoubleSpinBox,
     QCheckBox,
     QProgressBar,
+    QGroupBox,
 )
 from qtpy.QtCore import Qt
 
@@ -79,10 +80,18 @@ class OrientationWidget(QWidget):
         self.cb_origrad.setChecked(True)
         grid_layout.addWidget(self.cb_origrad, 4, 1)
 
-        grid_layout.addWidget(QLabel("Output vectors", self), 5, 0)
+        ### Vectors group
+        vectors_group = QGroupBox(self)
+        vectors_layout = QGridLayout()
+        vectors_group.setLayout(vectors_layout)
+        vectors_group.layout().setContentsMargins(10, 10, 10, 10)
+        grid_layout.addWidget(vectors_group, 5, 0, 1, 2)
+
+        # Output vectors
+        vectors_layout.addWidget(QLabel("Output vectors", self), 0, 0)
         self.cb_vec = QCheckBox()
         self.cb_vec.setChecked(True)
-        grid_layout.addWidget(self.cb_vec, 5, 1)
+        vectors_layout.addWidget(self.cb_vec, 0, 1)
 
         # Vector display spacing (X)
         self.node_spacing_spinbox_X = QSpinBox()
@@ -91,8 +100,8 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_X.setValue(10)
         self.node_spacing_spinbox_X.setSingleStep(1)
         self.node_spacing_spinbox_X.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (X)", self), 6, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_X, 6, 1)
+        vectors_layout.addWidget(QLabel("Spacing (X)", self), 1, 0)
+        vectors_layout.addWidget(self.node_spacing_spinbox_X, 1, 1)
 
         # Vector display spacing (Y)
         self.node_spacing_spinbox_Y = QSpinBox()
@@ -101,8 +110,8 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Y.setValue(10)
         self.node_spacing_spinbox_Y.setSingleStep(1)
         self.node_spacing_spinbox_Y.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (Y)", self), 7, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_Y, 7, 1)
+        vectors_layout.addWidget(QLabel("Spacing (Y)", self), 2, 0)
+        vectors_layout.addWidget(self.node_spacing_spinbox_Y, 2, 1)
 
         # Vector display spacing (Z)
         self.node_spacing_spinbox_Z = QSpinBox()
@@ -111,18 +120,24 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Z.setValue(1)
         self.node_spacing_spinbox_Z.setSingleStep(1)
         self.node_spacing_spinbox_Z.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector spacing (Z)", self), 8, 0)
-        grid_layout.addWidget(self.node_spacing_spinbox_Z, 8, 1)
+        vectors_layout.addWidget(QLabel("Spacing (Z)", self), 3, 0)
+        vectors_layout.addWidget(self.node_spacing_spinbox_Z, 3, 1)
 
         # Vector scale
         self.vector_scale_spinbox = QDoubleSpinBox()
         self.vector_scale_spinbox.setMinimum(0.0)
-        self.vector_scale_spinbox.setMaximum(4.0)
+        self.vector_scale_spinbox.setMaximum(100.0)
         self.vector_scale_spinbox.setValue(1.0)
         self.vector_scale_spinbox.setSingleStep(0.05)
         self.vector_scale_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Vector length", self), 9, 0)
-        grid_layout.addWidget(self.vector_scale_spinbox, 9, 1)
+        vectors_layout.addWidget(QLabel("Length factor", self), 4, 0)
+        vectors_layout.addWidget(self.vector_scale_spinbox, 4, 1)
+
+        # Energy rescaling
+        vectors_layout.addWidget(QLabel("Length is energy", self), 5, 0)
+        self.cb_energy_rescale = QCheckBox()
+        self.cb_energy_rescale.setChecked(True)
+        vectors_layout.addWidget(self.cb_energy_rescale, 5, 1)
 
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
@@ -146,7 +161,7 @@ class OrientationWidget(QWidget):
         self.cb_image.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
-                if len(x.data.shape) in [2, 3]:#== 3:
+                if len(x.data.shape) in [2, 3]:
                     if not x.rgb:
                         self.cb_image.addItem(x.name, x.data)
 
@@ -172,6 +187,7 @@ class OrientationWidget(QWidget):
             x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             z_sample = zgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            node_origins = np.stack((x_sample, y_sample, z_sample))
             energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
 
             theta_radians = np.radians(theta_sample)
@@ -180,17 +196,6 @@ class OrientationWidget(QWidget):
             y = np.sin(theta_radians) * np.sin(phi_radians)
             z = np.cos(phi_radians)
             (displacements_cartesian := np.stack((x, y, z))) / np.linalg.norm(displacements_cartesian, axis=0)
-            displacements_cartesian *= vector_scale
-            displacements_cartesian *= self.vector_scale_spinbox.value()
-            displacements_cartesian *= (energy_normalized := rescale_intensity(energy_sample, out_range=(0, 1)))
-
-            displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
-            node_origins = np.stack((x_sample, y_sample, z_sample))
-            origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
-
-            displacement_vectors = np.vstack((origins, displacements))
-            displacement_vectors = np.rollaxis(displacement_vectors, 1)
-        
         else:
             vector_scale = np.mean([self.nsy, self.nsx]) * 2
             node_spacing = (self.nsy, self.nsx)
@@ -200,24 +205,25 @@ class OrientationWidget(QWidget):
             theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1])]
             x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1])]
             y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1])]
+            node_origins = np.stack((x_sample, y_sample))
             energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1])]
 
-            theta_radians = np.radians(theta_sample)
+            theta_radians = np.radians(theta_sample + 90)
             x = np.cos(theta_radians)
             y = np.sin(theta_radians)
             (displacements_cartesian := np.stack((x, y))) / np.linalg.norm(displacements_cartesian, axis=0)
-            displacements_cartesian *= vector_scale
-            displacements_cartesian *= self.vector_scale_spinbox.value()
-            displacements_cartesian *= (energy_normalized := rescale_intensity(energy_sample, out_range=(0, 1)))
+        
+        displacements_cartesian *= vector_scale
+        displacements_cartesian *= self.vector_scale_spinbox.value()
+        energy_normalized = rescale_intensity(energy_sample, out_range=(0, 1))
+        if self.cb_energy_rescale.isChecked():
+            displacements_cartesian *= energy_normalized
 
-            displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
-            node_origins = np.stack((x_sample, y_sample))
-            origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
+        displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
+        origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
 
-            displacement_vectors = np.vstack((origins, displacements))
-            displacement_vectors = np.rollaxis(displacement_vectors, 1)
-            # print(displacement_vectors.shape)
-            # import sys; sys.exit()
+        displacement_vectors = np.vstack((origins, displacements))
+        displacement_vectors = np.rollaxis(displacement_vectors, 1)
 
         vector_props = {
             'name': 'Orientation vectors',
@@ -248,12 +254,12 @@ class OrientationWidget(QWidget):
         self.image = self.cb_image.currentData()
         image_shape = self.image.shape
         is_3D = len(image_shape) == 3
-
-        self.sigma = self.sigma_spinbox.value()
         if not is_3D:
-            self.cb_mode.setCurrentIndex(0)  # Reset the combobox if the image is 2D (only fiber supported)
-            show_info('Set mode to fiber (2D image).')
+            if self.mode != 'fiber':
+                self.cb_mode.setCurrentIndex(0)
+                show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
+        self.sigma = self.sigma_spinbox.value()
 
         gradients = orientationpy.computeGradient(self.image, mode='splines')
         structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
