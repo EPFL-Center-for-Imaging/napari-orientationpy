@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from napari_tools_menu import register_dock_widget
 from napari.utils.notifications import show_info
 from qtpy.QtWidgets import (
     QWidget, 
@@ -30,8 +29,6 @@ from skimage.exposure import rescale_intensity
 
 from .misorientation import fast_misorientation_angle
 
-
-@register_dock_widget(menu="Orientationpy > Orientation (pixels)")
 class OrientationWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
@@ -195,7 +192,8 @@ class OrientationWidget(QWidget):
             x = np.cos(theta_radians) * np.sin(phi_radians)
             y = np.sin(theta_radians) * np.sin(phi_radians)
             z = np.cos(phi_radians)
-            (displacements_cartesian := np.stack((x, y, z))) / np.linalg.norm(displacements_cartesian, axis=0)
+            displacements_cartesian = np.stack((x, y, z))
+            displacements_cartesian /= np.linalg.norm(displacements_cartesian, axis=0)
         else:
             vector_scale = np.mean([self.nsy, self.nsx]) * 2
             node_spacing = (self.nsy, self.nsx)
@@ -263,7 +261,6 @@ class OrientationWidget(QWidget):
 
         gradients = orientationpy.computeGradient(self.image, mode='splines')
         structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
-
         orientation_returns = orientationpy.computeOrientation(
             structureTensor, 
             mode=self.mode,
@@ -288,7 +285,6 @@ class OrientationWidget(QWidget):
             imDisplayHSV[..., 0] = (self.theta + 90) / 180
             imDisplayHSV[..., 1] = self.coherency / self.coherency.max()
             imDisplayHSV[..., 2] = self.image / self.image.max()
-
         
         self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
 

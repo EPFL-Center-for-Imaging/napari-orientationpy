@@ -5,17 +5,17 @@ contributions:
     - id: napari-orientationpy.pixels
       title: Orientation (pixels)
       python_name: napari_orientationpy:OrientationWidget
-    # - id: napari-orientationpy.distribution
-    #   title: Orientation distribution plot
-    #   python_name: napari_orientationpy:OrientationPlottingWidget
     - id: napari-orientationpy.boxes
       title: Orientation (boxes)
       python_name: napari_orientationpy:OrientationBoxesWidget
+    - id: napari-orientationpy.distribution
+      title: Orientation distribution plot
+      python_name: napari_orientationpy:OrientationPlottingWidget
   widgets:
     - command: napari-orientationpy.pixels
       display_name: Orientation (pixels)
-    # - command: napari-orientationpy.distribution
-    #   display_name: Orientation distribution plot
+    - command: napari-orientationpy.distribution
+      display_name: Orientation distribution (3D)
     - command: napari-orientationpy.boxes
       display_name: Orientation (boxes)
   sample_data:

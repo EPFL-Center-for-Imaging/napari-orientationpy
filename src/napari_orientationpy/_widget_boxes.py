@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from napari_tools_menu import register_dock_widget
 from napari.utils.notifications import show_info
 from qtpy.QtWidgets import (
     QWidget, 
@@ -24,7 +23,6 @@ import numpy as np
 import napari.layers
 from skimage.exposure import rescale_intensity
 
-@register_dock_widget(menu="Orientationpy > Orientation (boxes)")
 class OrientationBoxesWidget(QWidget):
     def __init__(self, napari_viewer):
         super().__init__()
