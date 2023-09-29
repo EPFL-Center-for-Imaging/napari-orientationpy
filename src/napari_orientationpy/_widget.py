@@ -50,7 +50,7 @@ class OrientationWidget(QWidget):
         # Image
         self.cb_image = QComboBox()
         self.cb_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("3D Image", self), 0, 0)
+        grid_layout.addWidget(QLabel("Image (2D or 3D)", self), 0, 0)
         grid_layout.addWidget(self.cb_image, 0, 1)
 
         # Sigma
