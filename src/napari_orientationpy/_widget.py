@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 from napari_tools_menu import register_dock_widget
+from napari.utils.notifications import show_info
 from qtpy.QtWidgets import (
     QWidget, 
     QComboBox, 
@@ -73,15 +74,15 @@ class OrientationWidget(QWidget):
         self.cb_rgb.setChecked(False)
         grid_layout.addWidget(self.cb_rgb, 3, 1)
 
-        grid_layout.addWidget(QLabel("Output vectors", self), 4, 0)
-        self.cb_vec = QCheckBox()
-        self.cb_vec.setChecked(True)
-        grid_layout.addWidget(self.cb_vec, 4, 1)
-
-        grid_layout.addWidget(QLabel("Output gradient", self), 5, 0)
+        grid_layout.addWidget(QLabel("Output gradient", self), 4, 0)
         self.cb_origrad = QCheckBox()
         self.cb_origrad.setChecked(True)
-        grid_layout.addWidget(self.cb_origrad, 5, 1)
+        grid_layout.addWidget(self.cb_origrad, 4, 1)
+
+        grid_layout.addWidget(QLabel("Output vectors", self), 5, 0)
+        self.cb_vec = QCheckBox()
+        self.cb_vec.setChecked(True)
+        grid_layout.addWidget(self.cb_vec, 5, 1)
 
         # Vector display spacing (X)
         self.node_spacing_spinbox_X = QSpinBox()
@@ -113,15 +114,25 @@ class OrientationWidget(QWidget):
         grid_layout.addWidget(QLabel("Vector spacing (Z)", self), 8, 0)
         grid_layout.addWidget(self.node_spacing_spinbox_Z, 8, 1)
 
+        # Vector scale
+        self.vector_scale_spinbox = QDoubleSpinBox()
+        self.vector_scale_spinbox.setMinimum(0.0)
+        self.vector_scale_spinbox.setMaximum(4.0)
+        self.vector_scale_spinbox.setValue(1.0)
+        self.vector_scale_spinbox.setSingleStep(0.05)
+        self.vector_scale_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        grid_layout.addWidget(QLabel("Vector length", self), 9, 0)
+        grid_layout.addWidget(self.vector_scale_spinbox, 9, 1)
+
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
-        grid_layout.addWidget(self.compute_orientation_btn, 9, 0, 1, 2)
+        grid_layout.addWidget(self.compute_orientation_btn, 10, 0, 1, 2)
 
         # Progress bar
         self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 10, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 11, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -135,55 +146,84 @@ class OrientationWidget(QWidget):
         self.cb_image.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
-                if len(x.data.shape) == 3:
+                if len(x.data.shape) in [2, 3]:#== 3:
                     if not x.rgb:
                         self.cb_image.addItem(x.name, x.data)
 
     def _orientation_vectors(self):
+        """
         
+        """
         self.nsx = self.node_spacing_spinbox_X.value()
         self.nsy = self.node_spacing_spinbox_Y.value()
         self.nsz = self.node_spacing_spinbox_Z.value()
-        vector_scale = np.mean([self.nsz, self.nsy, self.nsx]) * 2
 
-        node_spacing = (self.nsz, self.nsy, self.nsx)
+        ndims = len(self.image.shape)
+        is_3D = ndims == 3
 
-        phi_sample = self.phi[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-        theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+        if is_3D:
+            vector_scale = np.mean([self.nsz, self.nsy, self.nsx]) * 2
+            node_spacing = (self.nsz, self.nsy, self.nsx)
+            rx, ry, rz = self.image.shape
+            xgrid, ygrid, zgrid = np.mgrid[0:rx, 0:ry, 0:rz]
 
-        rx, ry, rz = self.image.shape
+            phi_sample = self.phi[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            z_sample = zgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
 
-        xgrid, ygrid, zgrid = np.mgrid[0:rx, 0:ry, 0:rz]
-        x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-        y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-        z_sample = zgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            theta_radians = np.radians(theta_sample)
+            phi_radians = np.radians(phi_sample)
+            x = np.cos(theta_radians) * np.sin(phi_radians)
+            y = np.sin(theta_radians) * np.sin(phi_radians)
+            z = np.cos(phi_radians)
+            (displacements_cartesian := np.stack((x, y, z))) / np.linalg.norm(displacements_cartesian, axis=0)
+            displacements_cartesian *= vector_scale
+            displacements_cartesian *= self.vector_scale_spinbox.value()
+            displacements_cartesian *= (energy_normalized := rescale_intensity(energy_sample, out_range=(0, 1)))
 
-        node_origins = np.concatenate((x_sample[None], y_sample[None], z_sample[None]))
+            displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
+            node_origins = np.stack((x_sample, y_sample, z_sample))
+            origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
 
-        theta_radians = np.radians(theta_sample)
-        phi_radians = np.radians(phi_sample)
+            displacement_vectors = np.vstack((origins, displacements))
+            displacement_vectors = np.rollaxis(displacement_vectors, 1)
+        
+        else:
+            vector_scale = np.mean([self.nsy, self.nsx]) * 2
+            node_spacing = (self.nsy, self.nsx)
+            rx, ry = self.image.shape
+            xgrid, ygrid = np.mgrid[0:rx, 0:ry]
 
-        x = np.cos(theta_radians) * np.sin(phi_radians)
-        y = np.sin(theta_radians) * np.sin(phi_radians)
-        z = np.cos(phi_radians)
-        (displacements_cartesian := np.concatenate((x[None], y[None], z[None]))) / np.linalg.norm(displacements_cartesian, axis=0)
+            theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1])]
+            x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1])]
+            y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1])]
+            energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1])]
 
-        displacements_cartesian *= vector_scale
+            theta_radians = np.radians(theta_sample)
+            x = np.cos(theta_radians)
+            y = np.sin(theta_radians)
+            (displacements_cartesian := np.stack((x, y))) / np.linalg.norm(displacements_cartesian, axis=0)
+            displacements_cartesian *= vector_scale
+            displacements_cartesian *= self.vector_scale_spinbox.value()
+            displacements_cartesian *= (energy_normalized := rescale_intensity(energy_sample, out_range=(0, 1)))
 
-        energy_rescaled = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-        displacements_cartesian *= (energy_normalized := rescale_intensity(energy_rescaled, out_range=(0, 1)))
+            displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
+            node_origins = np.stack((x_sample, y_sample))
+            origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
 
-        displacements = np.reshape(displacements_cartesian, (3, -1)).T[None]
-        origins = np.reshape(node_origins, (3, -1)).T[None] - displacements / 2
-
-        displacement_vectors = np.vstack((origins, displacements))
-        displacement_vectors = np.rollaxis(displacement_vectors, 1)
+            displacement_vectors = np.vstack((origins, displacements))
+            displacement_vectors = np.rollaxis(displacement_vectors, 1)
+            # print(displacement_vectors.shape)
+            # import sys; sys.exit()
 
         vector_props = {
             'name': 'Orientation vectors',
             'edge_width': 0.7,
             'opacity': 1.0,
-            'ndim': 3,
+            'ndim': ndims,
             'features': {'length': energy_normalized.ravel()},
             'edge_color': 'length',
             'vector_style': 'line',
@@ -202,35 +242,51 @@ class OrientationWidget(QWidget):
 
     @thread_worker
     def _compute_orientation(self) -> np.ndarray:
+        """
+        
+        """
         self.image = self.cb_image.currentData()
+        image_shape = self.image.shape
+        is_3D = len(image_shape) == 3
+
         self.sigma = self.sigma_spinbox.value()
+        if not is_3D:
+            self.cb_mode.setCurrentIndex(0)  # Reset the combobox if the image is 2D (only fiber supported)
+            show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
 
-        gx, gy, gz = orientationpy.computeGradient(self.image, mode='splines')
-        structureTensor = orientationpy.computeStructureTensor((gx, gy, gz), sigma=self.sigma)
+        gradients = orientationpy.computeGradient(self.image, mode='splines')
+        structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
+
         orientation_returns = orientationpy.computeOrientation(
             structureTensor, 
             mode=self.mode,
             computeEnergy=True, 
-            computeCoherency=False,
+            computeCoherency=True,
         )
 
-        self.theta = orientation_returns['theta']
-        self.phi = orientation_returns['phi']
-        self.energy = orientation_returns['energy']
-        # self.coherency = orientation_returns['coherency']
+        self.theta = orientation_returns.get('theta')
+        self.phi = orientation_returns.get('phi')
+        self.energy = orientation_returns.get('energy')
+        self.coherency = orientation_returns.get('coherency')
 
-        # Done once, by default.
-        rx, ry, rz = self.image.shape
-        imDisplayHSV = np.zeros((rx, ry, rz, 3), dtype="f4")
-        imDisplayHSV[..., 0] = self.phi / 360
-        imDisplayHSV[..., 1] = np.sin(np.deg2rad(self.theta))
-        imDisplayHSV[..., 2] = self.image / self.image.max()
+        if is_3D:
+            rx, ry, rz = image_shape
+            imDisplayHSV = np.zeros((rx, ry, rz, 3), dtype="f4")
+            imDisplayHSV[..., 0] = self.phi / 360
+            imDisplayHSV[..., 1] = np.sin(np.deg2rad(self.theta))
+            imDisplayHSV[..., 2] = self.image / self.image.max()
+        else:
+            rx, ry = image_shape
+            imDisplayHSV = np.zeros((rx, ry, 3), dtype="f4")
+            imDisplayHSV[..., 0] = (self.theta + 90) / 180
+            imDisplayHSV[..., 1] = self.coherency / self.coherency.max()
+            imDisplayHSV[..., 2] = self.image / self.image.max()
 
+        
         self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
 
         # Orientation gradient
-        print('Computing gradient.')
         self.orientation_gradient = fast_misorientation_angle(self.theta, self.phi)
 
     def _orientation_gradient(self):
@@ -239,7 +295,7 @@ class OrientationWidget(QWidget):
                 layer.data = self.orientation_gradient
                 return
 
-        self.viewer.add_image(self.orientation_gradient, colormap='inferno', name="Orientation gradient")
+        self.viewer.add_image(self.orientation_gradient, colormap="inferno", name="Orientation gradient", blending="additive")
 
     def _imdisplay_rgb(self):        
         for layer in self.viewer.layers:
@@ -260,7 +316,7 @@ class OrientationWidget(QWidget):
 
     def _check_should_compute(self):
         if self.cb_image.currentData() is None:
-            print("Select an image first.")
+            show_info("Select an image first.")
             return False
         
         if self.sigma != self.sigma_spinbox.value():
@@ -278,7 +334,10 @@ class OrientationWidget(QWidget):
         return False
 
     def _thread_returned(self):
-        if self.cb_rgb.isChecked(): self._imdisplay_rgb()
-        if self.cb_vec.isChecked(): self._orientation_vectors()
-        if self.cb_origrad.isChecked(): self._orientation_gradient()
+        if self.cb_image.currentData() is not None:
+            if self.cb_rgb.isChecked(): self._imdisplay_rgb()
+            if self.cb_vec.isChecked(): self._orientation_vectors()
+            if self.cb_origrad.isChecked(): self._orientation_gradient()
+        else:
+            show_info("Select an image first.")
         self.pbar.setMaximum(1)
