@@ -116,7 +116,7 @@ class OrientationBoxesWidget(QWidget):
     @thread_worker
     def _compute_orientation(self) -> np.ndarray:
         """
-        
+        Computes the greylevel orientations of the image in boxes.
         """
         self.image = self.cb_image.currentData()
         image_shape = self.image.shape

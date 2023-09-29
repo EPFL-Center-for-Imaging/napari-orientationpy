@@ -167,7 +167,7 @@ class OrientationWidget(QWidget):
 
     def _orientation_vectors(self):
         """
-        
+        Computes and displays orientation vectors on a regular spatial grid.
         """
         self.nsx = self.node_spacing_spinbox_X.value()
         self.nsy = self.node_spacing_spinbox_Y.value()
@@ -249,7 +249,7 @@ class OrientationWidget(QWidget):
     @thread_worker
     def _compute_orientation(self) -> np.ndarray:
         """
-        
+        Computes the greylevel orientations of the image.
         """
         self.image = self.cb_image.currentData()
         image_shape = self.image.shape

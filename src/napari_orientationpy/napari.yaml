@@ -21,7 +21,7 @@ contributions:
   sample_data:
     - key: bone
       display_name: Bone tissue (2D)
-      uri: https://gitlab.com/epfl-center-for-imaging/orientationpy/-/blob/main/data/2D/image1_from_OrientationJ.tif
+      uri: https://gitlab.com/epfl-center-for-imaging/orientationpy/-/raw/main/data/2D/image1_from_OrientationJ.tif
     - key: fiber
       display_name: Fibers (3D)
-      uri: https://gitlab.com/epfl-center-for-imaging/orientationpy/-/blob/main/data/3D/3dfib.tif
+      uri: https://gitlab.com/epfl-center-for-imaging/orientationpy/-/raw/main/data/3D/3dfib.tif
