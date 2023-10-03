@@ -10,6 +10,7 @@ from qtpy.QtWidgets import (
     QPushButton,
     QSpinBox,
     QProgressBar,
+    QCheckBox,
 )
 from qtpy.QtCore import Qt
 
@@ -32,6 +33,7 @@ class OrientationBoxesWidget(QWidget):
         self.mode = 'fiber'
         self.nsx = self.nsy = 10
         self.nsz = 1
+        self.energy_rescale = True
 
         # Layout
         grid_layout = QGridLayout()
@@ -81,17 +83,21 @@ class OrientationBoxesWidget(QWidget):
         grid_layout.addWidget(QLabel("Node spacing (Z)", self), 4, 0)
         grid_layout.addWidget(self.node_spacing_spinbox_Z, 4, 1)
 
-        
+        # Energy rescaling
+        grid_layout.addWidget(QLabel("Length is energy", self), 5, 0)
+        self.cb_energy_rescale = QCheckBox()
+        self.cb_energy_rescale.setChecked(self.energy_rescale)
+        grid_layout.addWidget(self.cb_energy_rescale, 5, 1)
 
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
-        grid_layout.addWidget(self.compute_orientation_btn, 5, 0, 1, 2)
+        grid_layout.addWidget(self.compute_orientation_btn, 6, 0, 1, 2)
 
         # Progress bar
         self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 6, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 7, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -123,13 +129,14 @@ class OrientationBoxesWidget(QWidget):
         ndims = len(image_shape)
         is_3D = ndims == 3
         if not is_3D:
-            if self.mode != 'fiber':
+            if self.cb_mode.currentText() != 'fiber':
                 self.cb_mode.setCurrentIndex(0)
                 show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
         self.nsx = self.node_spacing_spinbox_X.value()
         self.nsy = self.node_spacing_spinbox_Y.value()
         self.nsz = self.node_spacing_spinbox_Z.value()
+        self.energy_rescale = self.cb_energy_rescale.isChecked()
 
         if is_3D:
             node_spacing = (self.nsz, self.nsy, self.nsx)
@@ -159,7 +166,7 @@ class OrientationBoxesWidget(QWidget):
                 self.nsy // 2 : thetaBoxes.shape[1] * self.nsy + self.nsy // 2 : self.nsy,
                 self.nsx // 2 : thetaBoxes.shape[2] * self.nsx + self.nsx // 2 : self.nsx,
             ]
-            boxCentres = np.stack((boxCentresX, boxCentresY, boxCentresZ), axis=0)
+            boxCentres = np.stack((boxCentresX - self.nsx, boxCentresY - self.nsy, boxCentresZ - self.nsz), axis=0)
             _, bx, by, bz = boxCentres.shape
             nvects = bx*by*bz
         else:
@@ -167,20 +174,23 @@ class OrientationBoxesWidget(QWidget):
                 self.nsy // 2 : thetaBoxes.shape[0] * self.nsy + self.nsy // 2 : self.nsy,
                 self.nsx // 2 : thetaBoxes.shape[1] * self.nsx + self.nsx // 2 : self.nsx,
             ]
-            boxCentres = np.stack((boxCentresX, boxCentresY))
+            boxCentres = np.stack((boxCentresX - self.nsx, boxCentresY - self.nsy))
             _, bx, by = boxCentres.shape
             nvects = bx*by
         
-        bc = boxCentres.reshape((ndims, nvects))
+        origins = boxCentres.reshape((ndims, nvects))
 
         energy_normalized = rescale_intensity(energyBoxes, out_range=(0, 1))
 
         boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
-        bv = boxVectorCoords.reshape((ndims, nvects))
-        bv *= energy_normalized.reshape((nvects))
-        bv *= rescale_factor 
+        displacements = boxVectorCoords.reshape((ndims, nvects))
+        displacements *= rescale_factor 
+        if self.energy_rescale:
+            displacements *= energy_normalized.reshape((nvects))
 
-        vectors = np.stack((bc, bv), axis=0)
+        origins = origins - displacements / 2
+
+        vectors = np.stack((origins, displacements))
         vectors = np.rollaxis(vectors, axis=2)
 
         return (vectors, energy_normalized)
@@ -214,6 +224,9 @@ class OrientationBoxesWidget(QWidget):
         if self.image is None:
             return True
         
+        if self.energy_rescale != self.cb_energy_rescale.isChecked():
+            return True
+        
         if not np.array_equal(self.cb_image.currentData(), self.image):
             return True
         
@@ -224,16 +237,19 @@ class OrientationBoxesWidget(QWidget):
         if payload is None:
             return
         displacement_vectors, energy_normalized = payload
+        edge_width = np.max([self.nsx, self.nsy, self.nsz]) / 5
         vector_props = {
             'name': 'Orientation boxes',
-            'edge_width': 0.7,
+            'edge_width': edge_width,
             'opacity': 1.0,
             'ndim': displacement_vectors.shape[2],
             'features': {'length': energy_normalized.ravel()},
             'edge_color': 'length',
             'vector_style': 'line',
         }
+
         for idx, layer in enumerate(self.viewer.layers):
             if layer.name == "Orientation boxes":
                 self.viewer.layers.pop(idx)
+        
         self.viewer.add_vectors(displacement_vectors, **vector_props)

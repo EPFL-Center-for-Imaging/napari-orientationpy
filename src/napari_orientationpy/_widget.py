@@ -94,7 +94,7 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_X = QSpinBox()
         self.node_spacing_spinbox_X.setMinimum(1)
         self.node_spacing_spinbox_X.setMaximum(100)
-        self.node_spacing_spinbox_X.setValue(10)
+        self.node_spacing_spinbox_X.setValue(1)
         self.node_spacing_spinbox_X.setSingleStep(1)
         self.node_spacing_spinbox_X.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vectors_layout.addWidget(QLabel("Spacing (X)", self), 1, 0)
@@ -104,7 +104,7 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Y = QSpinBox()
         self.node_spacing_spinbox_Y.setMinimum(1)
         self.node_spacing_spinbox_Y.setMaximum(100)
-        self.node_spacing_spinbox_Y.setValue(10)
+        self.node_spacing_spinbox_Y.setValue(1)
         self.node_spacing_spinbox_Y.setSingleStep(1)
         self.node_spacing_spinbox_Y.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vectors_layout.addWidget(QLabel("Spacing (Y)", self), 2, 0)
@@ -173,35 +173,38 @@ class OrientationWidget(QWidget):
         ndims = len(self.image.shape)
         is_3D = ndims == 3
 
+        energy_normalized = rescale_intensity(self.energy, out_range=(0, 1))
+
         if is_3D:
             vector_scale = np.mean([self.nsz, self.nsy, self.nsx])
-            node_spacing = (self.nsz, self.nsy, self.nsx)
-            rx, ry, rz = self.image.shape
-            xgrid, ygrid, zgrid = np.mgrid[0:rx, 0:ry, 0:rz]
-            x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-            y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-            z_sample = zgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-            node_origins = np.stack((x_sample, y_sample, z_sample))
-            energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            xgrid, ygrid, zgrid = np.mgrid[0:self.image.shape[0], 0:self.image.shape[1], 0:self.image.shape[2]]
+            node_origins = np.stack(
+                (
+                    xgrid[::self.nsz, ::self.nsy, ::self.nsx], 
+                    ygrid[::self.nsz, ::self.nsy, ::self.nsx], 
+                    zgrid[::self.nsz, ::self.nsy, ::self.nsx]
+                )
+            )
+            energy_sample = energy_normalized[::self.nsz, ::self.nsy, ::self.nsx]
             boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
-            displacements_cartesian = boxVectorCoords[:, ::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
+            displacements_cartesian = boxVectorCoords[:, ::self.nsz, ::self.nsy, ::self.nsx]
         else:
             vector_scale = np.mean([self.nsy, self.nsx])
-            node_spacing = (self.nsy, self.nsx)
-            rx, ry = self.image.shape
-            xgrid, ygrid = np.mgrid[0:rx, 0:ry]
-            x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1])]
-            y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1])]
-            node_origins = np.stack((x_sample, y_sample))
-            energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1])]
+            xgrid, ygrid = np.mgrid[0:self.image.shape[0], 0:self.image.shape[1]]
+            node_origins = np.stack(
+                (
+                    xgrid[::self.nsy, ::self.nsx], 
+                    ygrid[::self.nsy, ::self.nsx]
+                )
+            )
+            energy_sample = energy_normalized[::self.nsy, ::self.nsx]
             boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
-            displacements_cartesian = boxVectorCoords[:, ::(node_spacing[0]), ::(node_spacing[1])]
+            displacements_cartesian = boxVectorCoords[:, ::self.nsy, ::self.nsx]
         
         displacements_cartesian *= vector_scale
         displacements_cartesian *= self.vector_scale_spinbox.value()
-        energy_normalized = rescale_intensity(energy_sample, out_range=(0, 1))
         if self.cb_energy_rescale.isChecked():
-            displacements_cartesian *= energy_normalized
+            displacements_cartesian *= energy_sample
 
         displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
         origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
@@ -209,20 +212,20 @@ class OrientationWidget(QWidget):
         displacement_vectors = np.vstack((origins, displacements))
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
 
+        edge_width = np.max([self.nsx, self.nsy, self.nsz]) / 5.0
         vector_props = {
             'name': 'Orientation vectors',
-            'edge_width': 0.7,
+            'edge_width': edge_width,
             'opacity': 1.0,
             'ndim': ndims,
-            'features': {'length': energy_normalized.ravel()},
+            'features': {'length': energy_sample.ravel()},
             'edge_color': 'length',
             'vector_style': 'line',
         }
 
-        for layer in self.viewer.layers:
+        for idx, layer in enumerate(self.viewer.layers):
             if layer.name == "Orientation vectors":
-                layer.data = displacement_vectors
-                return
+                self.viewer.layers.pop(idx)
 
         self.viewer.add_vectors(displacement_vectors, **vector_props)
 
@@ -254,7 +257,7 @@ class OrientationWidget(QWidget):
             computeCoherency=True,
         )
 
-        self.theta = self.orientation_returns.get('theta')
+        self.theta = self.orientation_returns.get('theta') + 90
         self.phi = self.orientation_returns.get('phi')
         self.energy = self.orientation_returns.get('energy')
         self.coherency = self.orientation_returns.get('coherency')
@@ -268,7 +271,7 @@ class OrientationWidget(QWidget):
         else:
             rx, ry = image_shape
             imDisplayHSV = np.zeros((rx, ry, 3), dtype="f4")
-            imDisplayHSV[..., 0] = (self.theta + 90) / 180
+            imDisplayHSV[..., 0] = (self.theta) / 180
             imDisplayHSV[..., 1] = self.coherency / self.coherency.max()
             imDisplayHSV[..., 2] = self.image / self.image.max()
         
