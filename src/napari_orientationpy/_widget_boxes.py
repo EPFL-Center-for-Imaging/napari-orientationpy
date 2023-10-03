@@ -81,6 +81,8 @@ class OrientationBoxesWidget(QWidget):
         grid_layout.addWidget(QLabel("Node spacing (Z)", self), 4, 0)
         grid_layout.addWidget(self.node_spacing_spinbox_Z, 4, 1)
 
+        
+
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
@@ -151,8 +153,6 @@ class OrientationBoxesWidget(QWidget):
         thetaBoxes = orientation_returns.get('theta')
         energyBoxes = orientation_returns.get('energy')
 
-        boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
-
         if is_3D:
             boxCentresX, boxCentresY, boxCentresZ = np.mgrid[
                 self.nsz // 2 : thetaBoxes.shape[0] * self.nsz + self.nsz // 2 : self.nsz,
@@ -172,9 +172,11 @@ class OrientationBoxesWidget(QWidget):
             nvects = bx*by
         
         bc = boxCentres.reshape((ndims, nvects))
-        bv = boxVectorCoords.reshape((ndims, nvects))
 
         energy_normalized = rescale_intensity(energyBoxes, out_range=(0, 1))
+
+        boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
+        bv = boxVectorCoords.reshape((ndims, nvects))
         bv *= energy_normalized.reshape((nvects))
         bv *= rescale_factor 
 

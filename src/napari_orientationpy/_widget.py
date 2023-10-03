@@ -174,42 +174,28 @@ class OrientationWidget(QWidget):
         is_3D = ndims == 3
 
         if is_3D:
-            vector_scale = np.mean([self.nsz, self.nsy, self.nsx]) * 2
+            vector_scale = np.mean([self.nsz, self.nsy, self.nsx])
             node_spacing = (self.nsz, self.nsy, self.nsx)
             rx, ry, rz = self.image.shape
             xgrid, ygrid, zgrid = np.mgrid[0:rx, 0:ry, 0:rz]
-
-            phi_sample = self.phi[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-            theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             z_sample = zgrid[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
             node_origins = np.stack((x_sample, y_sample, z_sample))
             energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
-
-            theta_radians = np.radians(theta_sample)
-            phi_radians = np.radians(phi_sample)
-            x = np.cos(theta_radians) * np.sin(phi_radians)
-            y = np.sin(theta_radians) * np.sin(phi_radians)
-            z = np.cos(phi_radians)
-            displacements_cartesian = np.stack((x, y, z))
-            displacements_cartesian /= np.linalg.norm(displacements_cartesian, axis=0)
+            boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
+            displacements_cartesian = boxVectorCoords[:, ::(node_spacing[0]), ::(node_spacing[1]), ::(node_spacing[2])]
         else:
-            vector_scale = np.mean([self.nsy, self.nsx]) * 2
+            vector_scale = np.mean([self.nsy, self.nsx])
             node_spacing = (self.nsy, self.nsx)
             rx, ry = self.image.shape
             xgrid, ygrid = np.mgrid[0:rx, 0:ry]
-
-            theta_sample = self.theta[::(node_spacing[0]), ::(node_spacing[1])]
             x_sample = xgrid[::(node_spacing[0]), ::(node_spacing[1])]
             y_sample = ygrid[::(node_spacing[0]), ::(node_spacing[1])]
             node_origins = np.stack((x_sample, y_sample))
             energy_sample = self.energy[::(node_spacing[0]), ::(node_spacing[1])]
-
-            theta_radians = np.radians(theta_sample + 90)
-            x = np.cos(theta_radians)
-            y = np.sin(theta_radians)
-            (displacements_cartesian := np.stack((x, y))) / np.linalg.norm(displacements_cartesian, axis=0)
+            boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
+            displacements_cartesian = boxVectorCoords[:, ::(node_spacing[0]), ::(node_spacing[1])]
         
         displacements_cartesian *= vector_scale
         displacements_cartesian *= self.vector_scale_spinbox.value()
@@ -253,7 +239,7 @@ class OrientationWidget(QWidget):
         image_shape = self.image.shape
         is_3D = len(image_shape) == 3
         if not is_3D:
-            if self.mode != 'fiber':
+            if self.cb_mode.currentText() != 'fiber':
                 self.cb_mode.setCurrentIndex(0)
                 show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
@@ -261,17 +247,17 @@ class OrientationWidget(QWidget):
 
         gradients = orientationpy.computeGradient(self.image, mode='splines')
         structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
-        orientation_returns = orientationpy.computeOrientation(
+        self.orientation_returns = orientationpy.computeOrientation(
             structureTensor, 
             mode=self.mode,
             computeEnergy=True, 
             computeCoherency=True,
         )
 
-        self.theta = orientation_returns.get('theta')
-        self.phi = orientation_returns.get('phi')
-        self.energy = orientation_returns.get('energy')
-        self.coherency = orientation_returns.get('coherency')
+        self.theta = self.orientation_returns.get('theta')
+        self.phi = self.orientation_returns.get('phi')
+        self.energy = self.orientation_returns.get('energy')
+        self.coherency = self.orientation_returns.get('coherency')
 
         if is_3D:
             rx, ry, rz = image_shape
