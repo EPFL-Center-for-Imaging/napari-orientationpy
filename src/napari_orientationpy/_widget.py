@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QProgressBar,
     QGroupBox,
+    QFileDialog,
 )
 from qtpy.QtCore import Qt
 
@@ -39,6 +40,7 @@ class OrientationWidget(QWidget):
         self.imdisplay_rgb = None
         self.sigma = 10
         self.mode = 'fiber'
+        self.orientation_computed = False
 
         # Layout
         grid_layout = QGridLayout()
@@ -141,10 +143,16 @@ class OrientationWidget(QWidget):
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
         grid_layout.addWidget(self.compute_orientation_btn, 10, 0, 1, 2)
 
+        # Save button
+        self.save_orientation_btn = QPushButton("Save orientation (CSV)", self)
+        self.save_orientation_btn.clicked.connect(self._save_orientation)
+        self.save_orientation_btn.setEnabled(self.orientation_computed)
+        grid_layout.addWidget(self.save_orientation_btn, 11, 0, 1, 2)
+
         # Progress bar
         self.pbar = QProgressBar(self, minimum=0, maximum=1)
         self.pbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(self.pbar, 11, 0, 1, 2)
+        grid_layout.addWidget(self.pbar, 12, 0, 1, 2)
 
         # Setup layer callbacks
         self.viewer.layers.events.inserted.connect(
@@ -166,6 +174,21 @@ class OrientationWidget(QWidget):
     def ndims(self):
         if self.image is not None:
             return len(self.image.shape)
+
+    def _save_orientation(self):
+        import pandas as pd
+        node_origins = np.stack([g for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
+        node_origins = node_origins.reshape(self.ndims, -1).T
+        dim_headers = ['X', 'Y', 'Z'][:self.ndims]
+        df = pd.DataFrame(data=node_origins, columns=dim_headers)
+        if self.theta is not None: df['theta'] = self.theta.ravel()
+        if self.phi is not None: df['phi'] = self.phi.ravel()
+        if self.energy is not None: df['energy'] = self.energy.ravel()
+        if self.coherency is not None: df['coherency'] = self.coherency.ravel()
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options)
+        if not file_path.endswith('.csv'): file_path += '.csv'
+        df.to_csv(file_path, index=False)
 
     def _orientation_vectors(self):
         """
@@ -231,6 +254,9 @@ class OrientationWidget(QWidget):
             computeEnergy=True, 
             computeCoherency=True,
         )
+        if not self.orientation_computed:
+            self.orientation_computed = True
+            self.save_orientation_btn.setEnabled(self.orientation_computed)
         self.boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
         self.theta = orientation_returns.get('theta') + 90
         self.phi = orientation_returns.get('phi')
