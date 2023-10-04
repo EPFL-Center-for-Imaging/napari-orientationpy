@@ -3,7 +3,7 @@ display_name: Napari Orientationpy
 contributions:
   commands:
     - id: napari-orientationpy.pixels
-      title: Orientation (pixels)
+      title: Orientation measurement
       python_name: napari_orientationpy:OrientationWidget
     # - id: napari-orientationpy.boxes
     #   title: Orientation (boxes)
@@ -13,7 +13,7 @@ contributions:
       python_name: napari_orientationpy:OrientationPlottingWidget
   widgets:
     - command: napari-orientationpy.pixels
-      display_name: Orientation (pixels)
+      display_name: Orientation measurement
     - command: napari-orientationpy.distribution
       display_name: Orientation distribution (3D)
     # - command: napari-orientationpy.boxes

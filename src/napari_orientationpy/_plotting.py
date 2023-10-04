@@ -12,9 +12,11 @@ def stereo_plot(ax, vector_displacements, direction='Z', sample_size=4000):
     vects_normed = sample / norms.reshape(-1, 1)
     
     projection_xy = np.zeros((len(vects_normed), 2))
-    idx = {'X': 0, 'Y': 1, 'Z': 2}[direction]
+    idx = {'Z': 0, 'Y': 1, 'X': 2}[direction]
     vects_normed[vects_normed[:, idx] > 0] *= -1  # Take care of symmetry
     for k, vect in enumerate(np.roll(vects_normed, axis=1, shift=-idx)):
+        if vect[0] == 1:
+            continue
         projection_xy[k] = [
             vect[1] / (1 - vect[0]), 
             vect[2] / (1 - vect[0])
@@ -27,13 +29,13 @@ def stereo_plot(ax, vector_displacements, direction='Z', sample_size=4000):
 
     # print(idx)
     # print(titles)
-    titles = np.roll(np.array(['X' ,'Y', 'Z']), shift=-idx)
-    ax.set_xlabel(titles[1])
-    ax.set_ylabel(titles[2])
+    titles = np.roll(np.array(['Z' ,'Y', 'X']), shift=-idx)
+    ax.set_ylabel(titles[1])
+    ax.set_xlabel(titles[2])
 
     # ax.set_axis_off()
     sns.kdeplot(
-        pd.DataFrame({'X': vects_normed[:, 0], 'Y': vects_normed[:, 1]}), 
+        pd.DataFrame({'X': projection_xy[:, 0], 'Y': projection_xy[:, 1]}), 
         x='X', y='Y', fill=True, ax=ax
     )
     # ax.plot(vects_normed[:, 0], vects_normed[:, 1], ".", markersize=5)
