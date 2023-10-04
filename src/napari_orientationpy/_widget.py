@@ -161,63 +161,41 @@ class OrientationWidget(QWidget):
                 if len(x.data.shape) in [2, 3]:
                     if not x.rgb:
                         self.cb_image.addItem(x.name, x.data)
+    
+    @property
+    def ndims(self):
+        if self.image is not None:
+            return len(self.image.shape)
 
     def _orientation_vectors(self):
         """
-        Computes and displays orientation vectors on a regular spatial grid.
+        Computes and displays orientation vectors on a regular spatial grid (2D or 3D).
         """
-        self.nsx = self.node_spacing_spinbox_X.value()
-        self.nsy = self.node_spacing_spinbox_Y.value()
-        self.nsz = self.node_spacing_spinbox_Z.value()
-
-        ndims = len(self.image.shape)
-        is_3D = ndims == 3
-
-        energy_normalized = rescale_intensity(self.energy, out_range=(0, 1))
-
-        if is_3D:
-            vector_scale = np.mean([self.nsz, self.nsy, self.nsx])
-            xgrid, ygrid, zgrid = np.mgrid[0:self.image.shape[0], 0:self.image.shape[1], 0:self.image.shape[2]]
-            node_origins = np.stack(
-                (
-                    xgrid[::self.nsz, ::self.nsy, ::self.nsx], 
-                    ygrid[::self.nsz, ::self.nsy, ::self.nsx], 
-                    zgrid[::self.nsz, ::self.nsy, ::self.nsx]
-                )
-            )
-            energy_sample = energy_normalized[::self.nsz, ::self.nsy, ::self.nsx]
-            boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
-            displacements_cartesian = boxVectorCoords[:, ::self.nsz, ::self.nsy, ::self.nsx]
-        else:
-            vector_scale = np.mean([self.nsy, self.nsx])
-            xgrid, ygrid = np.mgrid[0:self.image.shape[0], 0:self.image.shape[1]]
-            node_origins = np.stack(
-                (
-                    xgrid[::self.nsy, ::self.nsx], 
-                    ygrid[::self.nsy, ::self.nsx]
-                )
-            )
-            energy_sample = energy_normalized[::self.nsy, ::self.nsx]
-            boxVectorCoords = orientationpy.anglesToVectors(self.orientation_returns)
-            displacements_cartesian = boxVectorCoords[:, ::self.nsy, ::self.nsx]
-        
-        displacements_cartesian *= vector_scale
-        displacements_cartesian *= self.vector_scale_spinbox.value()
+        node_spacings = [
+            self.node_spacing_spinbox_Z.value(),
+            self.node_spacing_spinbox_Y.value(),
+            self.node_spacing_spinbox_X.value(),
+        ][:self.ndims]
+        slices = [slice(0, None, n) for n in node_spacings]
+        node_origins = np.stack([g[tuple(slices)] for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
+        energy_sample = self.energy[tuple(slices)]
+        slices.insert(0, slice(0, None))
+        displacements = self.boxVectorCoords[tuple(slices)].copy()
+        displacements *= np.mean(node_spacings)
+        displacements *= self.vector_scale_spinbox.value()
         if self.cb_energy_rescale.isChecked():
-            displacements_cartesian *= energy_sample
-
-        displacements = np.reshape(displacements_cartesian, (ndims, -1)).T[None]
-        origins = np.reshape(node_origins, (ndims, -1)).T[None] - displacements / 2
-
-        displacement_vectors = np.vstack((origins, displacements))
+            displacements *= energy_sample
+        displacements = np.reshape(displacements, (self.ndims, -1)).T
+        origins = np.reshape(node_origins, (self.ndims, -1)).T
+        origins = origins - displacements / 2
+        displacement_vectors = np.stack((origins, displacements))
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
 
-        edge_width = np.max([self.nsx, self.nsy, self.nsz]) / 5.0
         vector_props = {
             'name': 'Orientation vectors',
-            'edge_width': edge_width,
+            'edge_width': np.max(node_spacings) / 5.0,
             'opacity': 1.0,
-            'ndim': ndims,
+            'ndim': self.ndims,
             'features': {'length': energy_sample.ravel()},
             'edge_color': 'length',
             'vector_style': 'line',
@@ -239,45 +217,34 @@ class OrientationWidget(QWidget):
         Computes the greylevel orientations of the image.
         """
         self.image = self.cb_image.currentData()
-        image_shape = self.image.shape
-        is_3D = len(image_shape) == 3
-        if not is_3D:
-            if self.cb_mode.currentText() != 'fiber':
-                self.cb_mode.setCurrentIndex(0)
-                show_info('Set mode to fiber (2D image).')
+        if (self.ndims == 2) & (self.cb_mode.currentText() != 'fiber'):
+            self.cb_mode.setCurrentIndex(0)
+            show_info('Set mode to fiber (2D image).')
         self.mode = self.cb_mode.currentText()
         self.sigma = self.sigma_spinbox.value()
 
         gradients = orientationpy.computeGradient(self.image, mode='splines')
         structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
-        self.orientation_returns = orientationpy.computeOrientation(
+        orientation_returns = orientationpy.computeOrientation(
             structureTensor, 
             mode=self.mode,
             computeEnergy=True, 
             computeCoherency=True,
         )
+        self.boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
+        self.theta = orientation_returns.get('theta') + 90
+        self.phi = orientation_returns.get('phi')
+        self.energy = rescale_intensity(orientation_returns.get('energy'), out_range=(0, 1))
+        self.coherency = rescale_intensity(orientation_returns.get('coherency'), out_range=(0, 1))
 
-        self.theta = self.orientation_returns.get('theta') + 90
-        self.phi = self.orientation_returns.get('phi')
-        self.energy = self.orientation_returns.get('energy')
-        self.coherency = self.orientation_returns.get('coherency')
-
-        if is_3D:
-            rx, ry, rz = image_shape
-            imDisplayHSV = np.zeros((rx, ry, rz, 3), dtype="f4")
-            imDisplayHSV[..., 0] = self.phi / 360
-            imDisplayHSV[..., 1] = np.sin(np.deg2rad(self.theta))
-            imDisplayHSV[..., 2] = self.image / self.image.max()
+        if self.ndims == 3:
+            imDisplayHSV = np.stack((self.phi / 360, np.sin(np.deg2rad(self.theta)), self.image / self.image.max()), axis=-1)
+        elif self.ndims == 2:
+            imDisplayHSV = np.stack((self.theta / 180, self.coherency, self.image / self.image.max()), axis=-1)
         else:
-            rx, ry = image_shape
-            imDisplayHSV = np.zeros((rx, ry, 3), dtype="f4")
-            imDisplayHSV[..., 0] = (self.theta) / 180
-            imDisplayHSV[..., 1] = self.coherency / self.coherency.max()
-            imDisplayHSV[..., 2] = self.image / self.image.max()
-        
+            print(f'Number of dimensions ({self.ndims}) not supported.')
         self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
 
-        # Orientation gradient
         self.orientation_gradient = fast_misorientation_angle(self.theta, self.phi)
 
     def _orientation_gradient(self):

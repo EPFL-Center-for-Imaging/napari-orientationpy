@@ -237,7 +237,7 @@ class OrientationBoxesWidget(QWidget):
         if payload is None:
             return
         displacement_vectors, energy_normalized = payload
-        edge_width = np.max([self.nsx, self.nsy, self.nsz]) / 5
+        edge_width = np.max([self.nsx, self.nsy, self.nsz]) / 5.0
         vector_props = {
             'name': 'Orientation boxes',
             'edge_width': edge_width,
