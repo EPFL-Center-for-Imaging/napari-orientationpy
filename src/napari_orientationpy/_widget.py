@@ -38,7 +38,7 @@ class OrientationWidget(QWidget):
         self.image = None
         self.phi = self.theta = self.energy = self.coherency = None
         self.imdisplay_rgb = None
-        self.sigma = 10
+        self.sigma = 2.0
         self.mode = 'fiber'
         self.orientation_computed = False
 
@@ -50,7 +50,7 @@ class OrientationWidget(QWidget):
         # Image
         self.cb_image = QComboBox()
         self.cb_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Image (2D or 3D)", self), 0, 0)
+        grid_layout.addWidget(QLabel("Image (2D, 3D or RGB)", self), 0, 0)
         grid_layout.addWidget(self.cb_image, 0, 1)
 
         # Sigma
@@ -59,7 +59,7 @@ class OrientationWidget(QWidget):
         self.sigma_spinbox.setValue(self.sigma)
         self.sigma_spinbox.setSingleStep(0.1)
         self.sigma_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Sigma", self), 1, 0)
+        grid_layout.addWidget(QLabel("Structural scale (sigma)", self), 1, 0)
         grid_layout.addWidget(self.sigma_spinbox, 1, 1)
 
         # Mode
@@ -69,14 +69,14 @@ class OrientationWidget(QWidget):
         grid_layout.addWidget(QLabel("Mode", self), 2, 0)
         grid_layout.addWidget(self.cb_mode, 2, 1)
 
-        grid_layout.addWidget(QLabel("Output RGB", self), 3, 0)
+        grid_layout.addWidget(QLabel("Output color-coded orientation", self), 3, 0)
         self.cb_rgb = QCheckBox()
         self.cb_rgb.setChecked(False)
         grid_layout.addWidget(self.cb_rgb, 3, 1)
 
-        grid_layout.addWidget(QLabel("Output gradient", self), 4, 0)
+        grid_layout.addWidget(QLabel("Output orientation gradient", self), 4, 0)
         self.cb_origrad = QCheckBox()
-        self.cb_origrad.setChecked(True)
+        self.cb_origrad.setChecked(False)
         grid_layout.addWidget(self.cb_origrad, 4, 1)
 
         ### Vectors group
@@ -90,6 +90,7 @@ class OrientationWidget(QWidget):
         vectors_layout.addWidget(QLabel("Output vectors", self), 0, 0)
         self.cb_vec = QCheckBox()
         self.cb_vec.setChecked(True)
+        self.cb_vec.stateChanged.connect(self._enable_vector_params)
         vectors_layout.addWidget(self.cb_vec, 0, 1)
 
         # Vector display spacing (X)
@@ -122,20 +123,20 @@ class OrientationWidget(QWidget):
         vectors_layout.addWidget(QLabel("Spacing (Z)", self), 3, 0)
         vectors_layout.addWidget(self.node_spacing_spinbox_Z, 3, 1)
 
-        # Vector scale
-        self.vector_scale_spinbox = QDoubleSpinBox()
-        self.vector_scale_spinbox.setMinimum(0.0)
-        self.vector_scale_spinbox.setMaximum(100.0)
-        self.vector_scale_spinbox.setValue(1.0)
-        self.vector_scale_spinbox.setSingleStep(0.05)
-        self.vector_scale_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        vectors_layout.addWidget(QLabel("Length factor", self), 4, 0)
-        vectors_layout.addWidget(self.vector_scale_spinbox, 4, 1)
+        # # Vector scale (outdated)
+        # self.vector_scale_spinbox = QDoubleSpinBox()
+        # self.vector_scale_spinbox.setMinimum(0.0)
+        # self.vector_scale_spinbox.setMaximum(100.0)
+        # self.vector_scale_spinbox.setValue(1.0)
+        # self.vector_scale_spinbox.setSingleStep(0.05)
+        # self.vector_scale_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # vectors_layout.addWidget(QLabel("Length factor", self), 4, 0)
+        # vectors_layout.addWidget(self.vector_scale_spinbox, 4, 1)
 
         # Energy rescaling
         vectors_layout.addWidget(QLabel("Length is energy", self), 5, 0)
         self.cb_energy_rescale = QCheckBox()
-        self.cb_energy_rescale.setChecked(True)
+        self.cb_energy_rescale.setChecked(False)
         vectors_layout.addWidget(self.cb_energy_rescale, 5, 1)
 
         # Compute button
@@ -167,9 +168,15 @@ class OrientationWidget(QWidget):
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
                 if len(x.data.shape) in [2, 3]:
-                    if not x.rgb:
-                        self.cb_image.addItem(x.name, x.data)
+                    # if not x.rgb:
+                    self.cb_image.addItem(x.name, x.data)
     
+    def _enable_vector_params(self, value):
+        self.node_spacing_spinbox_X.setEnabled(value != 0)
+        self.node_spacing_spinbox_Y.setEnabled(value != 0)
+        self.node_spacing_spinbox_Z.setEnabled(value != 0)
+        self.cb_energy_rescale.setEnabled(value != 0)
+
     @property
     def ndims(self):
         if self.image is not None:
@@ -195,17 +202,18 @@ class OrientationWidget(QWidget):
         Computes and displays orientation vectors on a regular spatial grid (2D or 3D).
         """
         node_spacings = [
-            self.node_spacing_spinbox_Z.value(),
-            self.node_spacing_spinbox_Y.value(),
             self.node_spacing_spinbox_X.value(),
-        ][:self.ndims]
-        slices = [slice(0, None, n) for n in node_spacings]
+            self.node_spacing_spinbox_Y.value(),
+            self.node_spacing_spinbox_Z.value(),
+        ][:self.ndims][::-1]  # ZYX order in 3D
+        # slices = [slice(0, None, n) for n in node_spacings]
+        slices = [slice(n // 2, None, n) for n in node_spacings]
         node_origins = np.stack([g[tuple(slices)] for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
         energy_sample = self.energy[tuple(slices)]
         slices.insert(0, slice(0, None))
         displacements = self.boxVectorCoords[tuple(slices)].copy()
         displacements *= np.mean(node_spacings)
-        displacements *= self.vector_scale_spinbox.value()
+        # displacements *= self.vector_scale_spinbox.value()  # Outdated
         if self.cb_energy_rescale.isChecked():
             displacements *= energy_sample
         displacements = np.reshape(displacements, (self.ndims, -1)).T
@@ -239,7 +247,13 @@ class OrientationWidget(QWidget):
         """
         Computes the greylevel orientations of the image.
         """
-        self.image = self.cb_image.currentData()
+        image_layer = self.viewer.layers[self.cb_image.currentText()]
+        if image_layer is None:
+            return
+        
+        # If RGB, convert the image to grayscale
+        self.image = np.mean(image_layer.data, axis=2) if image_layer.rgb else image_layer.data
+        
         if (self.ndims == 2) & (self.cb_mode.currentText() != 'fiber'):
             self.cb_mode.setCurrentIndex(0)
             show_info('Set mode to fiber (2D image).')
