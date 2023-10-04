@@ -5,9 +5,9 @@ contributions:
     - id: napari-orientationpy.pixels
       title: Orientation (pixels)
       python_name: napari_orientationpy:OrientationWidget
-    - id: napari-orientationpy.boxes
-      title: Orientation (boxes)
-      python_name: napari_orientationpy:OrientationBoxesWidget
+    # - id: napari-orientationpy.boxes
+    #   title: Orientation (boxes)
+    #   python_name: napari_orientationpy:OrientationBoxesWidget
     - id: napari-orientationpy.distribution
       title: Orientation distribution plot
       python_name: napari_orientationpy:OrientationPlottingWidget
@@ -16,8 +16,8 @@ contributions:
       display_name: Orientation (pixels)
     - command: napari-orientationpy.distribution
       display_name: Orientation distribution (3D)
-    - command: napari-orientationpy.boxes
-      display_name: Orientation (boxes)
+    # - command: napari-orientationpy.boxes
+    #   display_name: Orientation (boxes)
   sample_data:
     - key: bone
       display_name: Bone tissue (2D)
