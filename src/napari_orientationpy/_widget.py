@@ -346,3 +346,4 @@ class OrientationWidget(QWidget):
         else:
             show_info("Select an image first.")
         self.pbar.setMaximum(1)
+        
