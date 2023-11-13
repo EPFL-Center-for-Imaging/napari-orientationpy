@@ -26,9 +26,16 @@ from napari.qt.threading import thread_worker
 import matplotlib
 import numpy as np
 import napari.layers
-from skimage.exposure import rescale_intensity
 
 from .misorientation import fast_misorientation_angle
+
+def rescale_intensity_quantile(image):
+    """Rescale the image intensity based on the 2nd and 98th quantiles."""
+    image = image.astype(np.float_)
+    image_normed = image - np.quantile(image, 0.02)
+    image_normed = image / np.quantile(image_normed, 0.98)
+    return image_normed
+
 
 class OrientationWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -167,8 +174,7 @@ class OrientationWidget(QWidget):
         self.cb_image.clear()
         for x in self.viewer.layers:
             if isinstance(x, napari.layers.Image):
-                if len(x.data.shape) in [2, 3]:
-                    # if not x.rgb:
+                if x.data.ndim in [2, 3]:
                     self.cb_image.addItem(x.name, x.data)
     
     def _enable_vector_params(self, value):
@@ -209,7 +215,7 @@ class OrientationWidget(QWidget):
         # slices = [slice(0, None, n) for n in node_spacings]
         slices = [slice(n // 2, None, n) for n in node_spacings]
         node_origins = np.stack([g[tuple(slices)] for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
-        energy_sample = self.energy[tuple(slices)]
+        energy_sample = self.energy[tuple(slices)].copy()
         slices.insert(0, slice(0, None))
         displacements = self.boxVectorCoords[tuple(slices)].copy()
         displacements *= np.mean(node_spacings)
@@ -274,8 +280,9 @@ class OrientationWidget(QWidget):
         self.boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
         self.theta = orientation_returns.get('theta') + 90
         self.phi = orientation_returns.get('phi')
-        self.energy = rescale_intensity(orientation_returns.get('energy'), out_range=(0, 1))
-        self.coherency = rescale_intensity(orientation_returns.get('coherency'), out_range=(0, 1))
+        self.energy = rescale_intensity_quantile(orientation_returns.get('energy'))
+        self.coherency = rescale_intensity_quantile(orientation_returns.get('coherency'))
+        # self.viewer.add_image(self.energy, blending='additive', colormap='inferno')
 
         if self.ndims == 3:
             imDisplayHSV = np.stack((self.phi / 360, np.sin(np.deg2rad(self.theta)), self.image / self.image.max()), axis=-1)
