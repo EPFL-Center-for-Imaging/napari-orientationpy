@@ -1,5 +1,3 @@
-from typing import TYPE_CHECKING
-
 from napari.utils.notifications import show_info
 from qtpy.QtWidgets import (
     QWidget, 
@@ -15,10 +13,8 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QFileDialog,
 )
+from superqt import QLabeledDoubleRangeSlider
 from qtpy.QtCore import Qt
-
-if TYPE_CHECKING:
-    import napari
 
 import orientationpy
 import napari
@@ -36,6 +32,7 @@ def rescale_intensity_quantile(image):
     image_normed = image / np.quantile(image_normed, 0.98)
     return image_normed
 
+from skimage.exposure import rescale_intensity
 
 class OrientationWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -146,6 +143,16 @@ class OrientationWidget(QWidget):
         self.cb_energy_rescale.setChecked(False)
         vectors_layout.addWidget(self.cb_energy_rescale, 5, 1)
 
+        # Intensity range
+        self.intensity_range = QLabeledDoubleRangeSlider(Qt.Orientation.Horizontal)
+        self.intensity_range.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.intensity_range.setRange(0, 1)
+        self.intensity_range.setValue((0.0, 1.0))
+        self.intensity_range.setEdgeLabelMode(QLabeledDoubleRangeSlider.LabelPosition.NoLabel)
+        self.intensity_range.setHandleLabelPosition(QLabeledDoubleRangeSlider.LabelPosition.NoLabel)
+        vectors_layout.addWidget(QLabel("Intensity range", self), 6, 0)
+        vectors_layout.addWidget(self.intensity_range, 6, 1)
+
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
         self.compute_orientation_btn.clicked.connect(self._trigger_compute_orientation)
@@ -216,14 +223,25 @@ class OrientationWidget(QWidget):
         slices = [slice(n // 2, None, n) for n in node_spacings]
         node_origins = np.stack([g[tuple(slices)] for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
         energy_sample = self.energy[tuple(slices)].copy()
+        image_normalized = rescale_intensity(self.image, out_range=(0, 1))
+        image_sample = image_normalized[tuple(slices)].copy()
         slices.insert(0, slice(0, None))
         displacements = self.boxVectorCoords[tuple(slices)].copy()
         displacements *= np.mean(node_spacings)
         # displacements *= self.vector_scale_spinbox.value()  # Outdated
         if self.cb_energy_rescale.isChecked():
             displacements *= energy_sample
+
+        # Filter based on intensity range
+        min_intensity, max_intensity = self.intensity_range.value()
+        intensity_filter = (min_intensity <= image_sample) & (image_sample <= max_intensity)
+        intensity_filter = intensity_filter.ravel()
+
         displacements = np.reshape(displacements, (self.ndims, -1)).T
         origins = np.reshape(node_origins, (self.ndims, -1)).T
+        origins = origins[intensity_filter]
+        displacements = displacements[intensity_filter]
+        energy_sample = energy_sample.ravel()[intensity_filter]
         origins = origins - displacements / 2
         displacement_vectors = np.stack((origins, displacements))
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
@@ -233,7 +251,7 @@ class OrientationWidget(QWidget):
             'edge_width': np.max(node_spacings) / 5.0,
             'opacity': 1.0,
             'ndim': self.ndims,
-            'features': {'length': energy_sample.ravel()},
+            'features': {'length': energy_sample},
             'edge_color': 'length',
             'vector_style': 'line',
         }

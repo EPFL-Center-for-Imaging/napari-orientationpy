@@ -55,7 +55,7 @@ def fast_misorientation_angle(theta, phi=None):
     
     disangle_max = np.max(
         np.stack(
-            (
+            tuple(
                 disangle(cartesians, axis=a)
                     for a in range(n_dims)
             )

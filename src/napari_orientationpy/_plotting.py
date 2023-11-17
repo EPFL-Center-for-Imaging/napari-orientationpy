@@ -22,20 +22,15 @@ def stereo_plot(ax, vector_displacements, direction='Z', sample_size=4000):
             vect[2] / (1 - vect[0])
         ]
 
-    # ax.set_facecolor((1.0, 1.0, 1.0))
     ax.add_artist( plt.Circle((0, 0), 1, fill=False))
     ax.set_xlim(-1.01, 1.01)
     ax.set_ylim(-1.01, 1.01)
 
-    # print(idx)
-    # print(titles)
     titles = np.roll(np.array(['Z' ,'Y', 'X']), shift=-idx)
     ax.set_ylabel(titles[1])
     ax.set_xlabel(titles[2])
 
-    # ax.set_axis_off()
     sns.kdeplot(
         pd.DataFrame({'X': projection_xy[:, 0], 'Y': projection_xy[:, 1]}), 
         x='X', y='Y', fill=True, ax=ax
     )
-    # ax.plot(vects_normed[:, 0], vects_normed[:, 1], ".", markersize=5)
