@@ -1,3 +1,4 @@
+![EPFL Center for Imaging logo](https://imaging.epfl.ch/resources/logo-for-gitlab.svg)
 # napari-orientationpy
 
 Analyze orientations in 2D, 3D, and RGB images in Napari. This plugin is based on the [Orientationpy](https://gitlab.com/epfl-center-for-imaging/orientationpy/) project.
