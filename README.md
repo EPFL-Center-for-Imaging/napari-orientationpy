@@ -25,7 +25,7 @@ Alternatively, you can download, unzip, and execute the latest installer from th
 To get started, open an image in the Napari viewer and start `napari-orientationpy` from the `Plugins` menu:
 
 ```
-Plugins > Napari Orientationpy > Orientation measurement
+Plugins > Orientation measurement (Napari Orientationpy)
 ```
 
 1. **Select the structural scale parameter `sigma`**. This value control represents the scale at which the image gradients are computed. Try different values of `sigma` to understand what works best for your images. A reasonable guess would be the order in size, in pixels, of the structures that you are interested in. For example, if you are imaging fibers that appear to be about 4 pixels wide, try to set a value of *sigma=4*.
