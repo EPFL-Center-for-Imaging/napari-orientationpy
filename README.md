@@ -1,7 +1,7 @@
 ![EPFL Center for Imaging logo](https://imaging.epfl.ch/resources/logo-for-gitlab.svg)
 # napari-orientationpy
 
-Analyze orientations in 2D, 3D, and RGB images in Napari. This plugin is based on the [Orientationpy](https://gitlab.com/epfl-center-for-imaging/orientationpy/) project.
+Analyze greylevel orientations in 2D and 3D in Napari. This plugin is based on the [Orientationpy](https://gitlab.com/epfl-center-for-imaging/orientationpy/) project.
 
 <p align="center">
     <img src="assets/ori_color-1.gif" height="400">
@@ -9,9 +9,17 @@ Analyze orientations in 2D, 3D, and RGB images in Napari. This plugin is based o
 
 ## Installation
 
-You can install `napari-orientationpy` via [pip]:
+**Python installation**
 
-    pip install napari-orientationpy
+You can install `napari-orientationpy` as a Python package via pip:
+
+```
+pip install napari-orientationpy
+```
+
+**Executable installer**
+
+Alternatively, you can download, unzip, and execute the latest installer from the [Releases](https://github.com/EPFL-Center-for-Imaging/napari-orientationpy/releases) page to install `napari-orientationpy` as a standalone app. The first time you run the app, it'll take some time to install the project on your computer (this is only on the first run).
 
 ## Usage
 To get started, open an image in the Napari viewer and start `napari-orientationpy` from the `Plugins` menu:
@@ -30,15 +38,15 @@ Plugins > Napari Orientationpy > Orientation measurement
 
 3. **Decide which outputs you'd like to visualize.**
   - The `color-coded orientation` is a pixel-wise representation of 3D orientations as colors (similar colors = similar orientations).
-  - The `orientation vectors` get rendered in a `Vectors` layer in Napari. They are sampled on a regular grid defined by the `Spacing (X)`, `Spacing (Y)` and `Spacing (Z)` values (for 2D images, the `Z` value is ignored). The length of the vectors can be rescaled based on the `energy` value of the orientation computation.
+  - The `orientation vectors` get rendered in a `Vectors` layer in Napari. They are sampled on a regular grid defined by the `Spacing (X)`, `Spacing (Y)` and `Spacing (Z)` values (for 2D images, the `Z` value is ignored).
   - You can also output the local `orientation gradient` (misorientation).
 
 4. **Compute orientation**. This button will trigger the orientation computation **only when necessary** (i.e. when the value of `sigma`, the `mode` or the `image` have changed). If you only adjust the `orientation vectors` parameters, clicking the compute button will update the results very fast.
-5. **Save orientation (CSV)**. This will save the orientation measurements as a CSV table with columns `X`, `Y`, `Z`, `theta`, `phi`, `energy`, and `coherency` for all the pixels in the image. 
+5. **Save orientation (CSV)**. This will save the orientation measurements as a CSV table with columns `X`, `Y`, `Z`, `theta`, `phi`, for all the pixels in the image. 
 
 ## Sample images
 
-We provide a few sample images to test our plugin. Open them from:
+We provide a few sample images to test our plugin. You can open them from:
 
 ```
 File > Open Sample > Napari Orientationpy
@@ -46,19 +54,16 @@ File > Open Sample > Napari Orientationpy
 
 ## Contributing
 
-Contributions are very welcome. Please get in touch if you'd like to be involved in improving or extending the package.
+Contributions are very welcome.
 
 ## License
 
-Distributed under the terms of the [BSD-3] license,
-"napari-orientationpy" is free and open source software
+This software is distributed under the terms of the [BSD-3](http://opensource.org/licenses/BSD-3-Clause) license.
 
 ## Issues
 
 If you encounter any problems, please file an issue along with a detailed description.
 
-----------------------------------
+## Acknowledgements
 
-[napari]: https://github.com/napari/napari
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[pip]: https://pypi.org/project/pip/
+This project uses the [PyApp](https://github.com/ofek/pyapp) software for creating a runtime installer.
