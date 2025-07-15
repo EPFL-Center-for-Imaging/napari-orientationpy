@@ -22,6 +22,10 @@ dependencies = [
     "napari[all]>=0.4.16",
     "qtpy",
     "orientationpy>=0.3.0",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "scikit-image",
 ]
 
 [project.entry-points."napari.manifest"]

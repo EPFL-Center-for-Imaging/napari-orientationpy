@@ -1,38 +1,19 @@
-from napari.utils.notifications import show_info
-from qtpy.QtWidgets import (
-    QWidget, 
-    QComboBox, 
-    QSizePolicy, 
-    QLabel, 
-    QGridLayout, 
-    QPushButton,
-    QSpinBox,
-    QDoubleSpinBox,
-    QCheckBox,
-    QProgressBar,
-    QGroupBox,
-    QFileDialog,
-)
-from superqt import QLabeledDoubleRangeSlider
-from qtpy.QtCore import Qt
-
-import orientationpy
-import napari
-from napari.qt.threading import thread_worker
 import matplotlib
-import numpy as np
+import napari
 import napari.layers
+import numpy as np
+import pandas as pd
+import orientationpy
+from napari.qt.threading import thread_worker
+from napari.utils.notifications import show_info
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+                            QGridLayout, QGroupBox, QLabel, QProgressBar,
+                            QPushButton, QSizePolicy, QSpinBox, QWidget)
+from skimage.exposure import rescale_intensity
 
 from .misorientation import fast_misorientation_angle
 
-def rescale_intensity_quantile(image):
-    """Rescale the image intensity based on the 2nd and 98th quantiles."""
-    image = image.astype(np.float_)
-    image_normed = image - np.quantile(image, 0.02)
-    image_normed = image / np.quantile(image_normed, 0.98)
-    return image_normed
-
-from skimage.exposure import rescale_intensity
 
 class OrientationWidget(QWidget):
     def __init__(self, napari_viewer):
@@ -40,7 +21,7 @@ class OrientationWidget(QWidget):
         self.viewer = napari_viewer
 
         self.image = None
-        self.phi = self.theta = self.energy = self.coherency = None
+        self.phi = self.theta = None
         self.imdisplay_rgb = None
         self.sigma = 2.0
         self.mode = 'fiber'
@@ -54,7 +35,7 @@ class OrientationWidget(QWidget):
         # Image
         self.cb_image = QComboBox()
         self.cb_image.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        grid_layout.addWidget(QLabel("Image (2D, 3D or RGB)", self), 0, 0)
+        grid_layout.addWidget(QLabel("Image (2D, 3D, RGB)", self), 0, 0)
         grid_layout.addWidget(self.cb_image, 0, 1)
 
         # Sigma
@@ -75,12 +56,12 @@ class OrientationWidget(QWidget):
 
         grid_layout.addWidget(QLabel("Output color-coded orientation", self), 3, 0)
         self.cb_rgb = QCheckBox()
-        self.cb_rgb.setChecked(False)
+        self.cb_rgb.setChecked(True)
         grid_layout.addWidget(self.cb_rgb, 3, 1)
 
         grid_layout.addWidget(QLabel("Output orientation gradient", self), 4, 0)
         self.cb_origrad = QCheckBox()
-        self.cb_origrad.setChecked(False)
+        self.cb_origrad.setChecked(True)
         grid_layout.addWidget(self.cb_origrad, 4, 1)
 
         ### Vectors group
@@ -101,7 +82,7 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_X = QSpinBox()
         self.node_spacing_spinbox_X.setMinimum(1)
         self.node_spacing_spinbox_X.setMaximum(100)
-        self.node_spacing_spinbox_X.setValue(1)
+        self.node_spacing_spinbox_X.setValue(3)
         self.node_spacing_spinbox_X.setSingleStep(1)
         self.node_spacing_spinbox_X.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vectors_layout.addWidget(QLabel("Spacing (X)", self), 1, 0)
@@ -111,7 +92,7 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Y = QSpinBox()
         self.node_spacing_spinbox_Y.setMinimum(1)
         self.node_spacing_spinbox_Y.setMaximum(100)
-        self.node_spacing_spinbox_Y.setValue(1)
+        self.node_spacing_spinbox_Y.setValue(3)
         self.node_spacing_spinbox_Y.setSingleStep(1)
         self.node_spacing_spinbox_Y.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vectors_layout.addWidget(QLabel("Spacing (Y)", self), 2, 0)
@@ -126,32 +107,6 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_Z.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         vectors_layout.addWidget(QLabel("Spacing (Z)", self), 3, 0)
         vectors_layout.addWidget(self.node_spacing_spinbox_Z, 3, 1)
-
-        # # Vector scale (outdated)
-        # self.vector_scale_spinbox = QDoubleSpinBox()
-        # self.vector_scale_spinbox.setMinimum(0.0)
-        # self.vector_scale_spinbox.setMaximum(100.0)
-        # self.vector_scale_spinbox.setValue(1.0)
-        # self.vector_scale_spinbox.setSingleStep(0.05)
-        # self.vector_scale_spinbox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        # vectors_layout.addWidget(QLabel("Length factor", self), 4, 0)
-        # vectors_layout.addWidget(self.vector_scale_spinbox, 4, 1)
-
-        # Energy rescaling
-        vectors_layout.addWidget(QLabel("Length is energy", self), 5, 0)
-        self.cb_energy_rescale = QCheckBox()
-        self.cb_energy_rescale.setChecked(False)
-        vectors_layout.addWidget(self.cb_energy_rescale, 5, 1)
-
-        # Intensity range
-        self.intensity_range = QLabeledDoubleRangeSlider(Qt.Orientation.Horizontal)
-        self.intensity_range.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.intensity_range.setRange(0, 1)
-        self.intensity_range.setValue((0.0, 1.0))
-        self.intensity_range.setEdgeLabelMode(QLabeledDoubleRangeSlider.LabelPosition.NoLabel)
-        self.intensity_range.setHandleLabelPosition(QLabeledDoubleRangeSlider.LabelPosition.NoLabel)
-        vectors_layout.addWidget(QLabel("Intensity range", self), 6, 0)
-        vectors_layout.addWidget(self.intensity_range, 6, 1)
 
         # Compute button
         self.compute_orientation_btn = QPushButton("Compute orientation", self)
@@ -188,7 +143,6 @@ class OrientationWidget(QWidget):
         self.node_spacing_spinbox_X.setEnabled(value != 0)
         self.node_spacing_spinbox_Y.setEnabled(value != 0)
         self.node_spacing_spinbox_Z.setEnabled(value != 0)
-        self.cb_energy_rescale.setEnabled(value != 0)
 
     @property
     def ndims(self):
@@ -196,15 +150,12 @@ class OrientationWidget(QWidget):
             return len(self.image.shape)
 
     def _save_orientation(self):
-        import pandas as pd
         node_origins = np.stack([g for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
         node_origins = node_origins.reshape(self.ndims, -1).T
         dim_headers = ['X', 'Y', 'Z'][:self.ndims]
         df = pd.DataFrame(data=node_origins, columns=dim_headers)
         if self.theta is not None: df['theta'] = self.theta.ravel()
         if self.phi is not None: df['phi'] = self.phi.ravel()
-        if self.energy is not None: df['energy'] = self.energy.ravel()
-        if self.coherency is not None: df['coherency'] = self.coherency.ravel()
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", "", "CSV Files (*.csv);;All Files (*)", options=options)
         if not file_path.endswith('.csv'): file_path += '.csv'
@@ -222,26 +173,13 @@ class OrientationWidget(QWidget):
         # slices = [slice(0, None, n) for n in node_spacings]
         slices = [slice(n // 2, None, n) for n in node_spacings]
         node_origins = np.stack([g[tuple(slices)] for g in np.mgrid[[slice(0, x) for x in self.image.shape]]])
-        energy_sample = self.energy[tuple(slices)].copy()
         image_normalized = rescale_intensity(self.image, out_range=(0, 1))
         image_sample = image_normalized[tuple(slices)].copy()
         slices.insert(0, slice(0, None))
         displacements = self.boxVectorCoords[tuple(slices)].copy()
         displacements *= np.mean(node_spacings)
-        # displacements *= self.vector_scale_spinbox.value()  # Outdated
-        if self.cb_energy_rescale.isChecked():
-            displacements *= energy_sample
-
-        # Filter based on intensity range
-        min_intensity, max_intensity = self.intensity_range.value()
-        intensity_filter = (min_intensity <= image_sample) & (image_sample <= max_intensity)
-        intensity_filter = intensity_filter.ravel()
-
         displacements = np.reshape(displacements, (self.ndims, -1)).T
         origins = np.reshape(node_origins, (self.ndims, -1)).T
-        origins = origins[intensity_filter]
-        displacements = displacements[intensity_filter]
-        energy_sample = energy_sample.ravel()[intensity_filter]
         origins = origins - displacements / 2
         displacement_vectors = np.stack((origins, displacements))
         displacement_vectors = np.rollaxis(displacement_vectors, 1)
@@ -251,8 +189,6 @@ class OrientationWidget(QWidget):
             'edge_width': np.max(node_spacings) / 5.0,
             'opacity': 1.0,
             'ndim': self.ndims,
-            'features': {'length': energy_sample},
-            'edge_color': 'length',
             'vector_style': 'line',
         }
 
@@ -281,33 +217,29 @@ class OrientationWidget(QWidget):
         if (self.ndims == 2) & (self.cb_mode.currentText() != 'fiber'):
             self.cb_mode.setCurrentIndex(0)
             show_info('Set mode to fiber (2D image).')
+        
         self.mode = self.cb_mode.currentText()
         self.sigma = self.sigma_spinbox.value()
 
         gradients = orientationpy.computeGradient(self.image, mode='splines')
         structureTensor = orientationpy.computeStructureTensor(gradients, sigma=self.sigma)
-        orientation_returns = orientationpy.computeOrientation(
-            structureTensor, 
-            mode=self.mode,
-            computeEnergy=True, 
-            computeCoherency=True,
-        )
+        orientation_returns = orientationpy.computeOrientation(structureTensor, mode=self.mode)
         if not self.orientation_computed:
             self.orientation_computed = True
             self.save_orientation_btn.setEnabled(self.orientation_computed)
-        self.boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
+        
         self.theta = orientation_returns.get('theta') + 90
         self.phi = orientation_returns.get('phi')
-        self.energy = rescale_intensity_quantile(orientation_returns.get('energy'))
-        self.coherency = rescale_intensity_quantile(orientation_returns.get('coherency'))
-        # self.viewer.add_image(self.energy, blending='additive', colormap='inferno')
+
+        self.boxVectorCoords = orientationpy.anglesToVectors(orientation_returns)
 
         if self.ndims == 3:
             imDisplayHSV = np.stack((self.phi / 360, np.sin(np.deg2rad(self.theta)), self.image / self.image.max()), axis=-1)
         elif self.ndims == 2:
-            imDisplayHSV = np.stack((self.theta / 180, self.coherency, self.image / self.image.max()), axis=-1)
+            imDisplayHSV = np.stack((self.theta / 180, np.ones_like(self.image), self.image / self.image.max()), axis=-1)
         else:
             print(f'Number of dimensions ({self.ndims}) not supported.')
+        
         self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
 
         self.orientation_gradient = fast_misorientation_angle(self.theta, self.phi)
