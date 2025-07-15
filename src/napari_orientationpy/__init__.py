@@ -1,3 +1,7 @@
-from ._widget import OrientationWidget
+from ._version import version as __version__
+try:
+    from ._version import version as __version__
+except ImportError:
+    __version__ = "unknown"
 
-__all__ = "OrientationWidget"
+from napari_orientationpy._widget import OrientationWidget
