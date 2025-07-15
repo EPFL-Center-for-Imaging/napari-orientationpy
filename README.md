@@ -36,17 +36,6 @@ Plugins > Napari Orientationpy > Orientation measurement
 4. **Compute orientation**. This button will trigger the orientation computation **only when necessary** (i.e. when the value of `sigma`, the `mode` or the `image` have changed). If you only adjust the `orientation vectors` parameters, clicking the compute button will update the results very fast.
 5. **Save orientation (CSV)**. This will save the orientation measurements as a CSV table with columns `X`, `Y`, `Z`, `theta`, `phi`, `energy`, and `coherency` for all the pixels in the image. 
 
-### Plotting the 3D orientation distribution
-
-If you have computed **orientation vectors** for a 3D image, you can plot their spatial distribution as a `stereographic projection` along the `X`, `Y` or `Z` direction directly in Napari. Select the widget from:
-
-```
-Plugins > Napari Orientationpy > Orientation distribution (3D)
-```
-<p align="center">
-    <img src="assets/fibers_dist.png" height="400">
-</p>
-
 ## Sample images
 
 We provide a few sample images to test our plugin. Open them from:
