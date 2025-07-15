@@ -42,7 +42,7 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
 
     env:
-      PYAPP_PROJECT_NAME: ${{ github.repository }}
+      PYAPP_PROJECT_NAME: "napari_orientationpy"
 
     steps:
       - name: Checkout code
