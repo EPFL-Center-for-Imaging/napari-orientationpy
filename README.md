@@ -1,7 +1,7 @@
 ![EPFL Center for Imaging logo](https://imaging.epfl.ch/resources/logo-for-gitlab.svg)
 # napari-orientationpy
 
-Analyze greylevel orientations in 2D and 3D in [Napari](https://napari.org/stable/). This plugin is based on the [Orientationpy](https://gitlab.com/epfl-center-for-imaging/orientationpy/) project.
+Analyze grayscale orientations in 2D and 3D in [Napari](https://napari.org/stable/). This plugin is based on the [Orientationpy](https://gitlab.com/epfl-center-for-imaging/orientationpy/) project.
 
 <p align="center">
     <img src="assets/ori_color-1.gif" height="400">
