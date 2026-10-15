@@ -24,7 +24,6 @@ dependencies = [
     "orientationpy>=0.3.0",
     "numpy",
     "pandas",
-    "matplotlib",
     "scikit-image",
 ]
 

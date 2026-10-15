@@ -1,9 +1,7 @@
-import matplotlib
 import napari
 import napari.layers
 import numpy as np
 import pandas as pd
-import orientationpy
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info
 from qtpy.QtCore import Qt
@@ -11,6 +9,9 @@ from qtpy.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
                             QGridLayout, QGroupBox, QLabel, QProgressBar,
                             QPushButton, QSizePolicy, QSpinBox, QWidget)
 from skimage.exposure import rescale_intensity
+from skimage.color import hsv2rgb
+
+import orientationpy
 
 from .misorientation import fast_misorientation_angle
 
@@ -240,7 +241,7 @@ class OrientationWidget(QWidget):
         else:
             print(f'Number of dimensions ({self.ndims}) not supported.')
         
-        self.imdisplay_rgb = matplotlib.colors.hsv_to_rgb(imDisplayHSV)
+        self.imdisplay_rgb = (hsv2rgb(imDisplayHSV) * 255).astype(np.uint8)
 
         self.orientation_gradient = fast_misorientation_angle(self.theta, self.phi)
 
